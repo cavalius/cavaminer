@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest something new, or support for a pool, GPU or algorithm
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why, and how would you use it?
+  - type: input
+    id: setup
+    attributes:
+      label: Your setup (optional)
+      placeholder: "Linux, 2× RTX 5090, AlphaPool"
