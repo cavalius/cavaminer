@@ -50,7 +50,7 @@ https://github.com/cavalius/cavaminer/issues</p>
 </tr>
 <tr>
 <td>Windows</td>
-<td>Windows 10 or 11, x64, one <code>cavaminer.exe</code>; PearlHash and RandomX mine as on Linux (see Windows below for what differs: large pages need a right of the account, there is no MSR tweak, no CPU clock cap and no CPU power reading)</td>
+<td>Windows 10 or 11, x64, one <code>cavaminer.exe</code>; PearlHash and RandomX mine as on Linux (see Windows below for what differs: the program is not code-signed yet, so Windows 11's Smart App Control blocks it; large pages need a right of the account, there is no MSR tweak, no CPU clock cap and no CPU power reading)</td>
 </tr>
 <tr>
 <td>PearlHash</td>
@@ -268,6 +268,20 @@ in a terminal opened as administrator for power limits, clocks, the clock
 offset and large pages; without that it mines with the driver's settings.
 What differs from Linux:</p>
 <ul>
+<li><strong>Not code-signed yet.</strong> The Windows program carries no code signature
+  in this release; a signed one will follow in a future release. Until
+  then:</li>
+<li>With <strong>Smart App Control</strong> on (Windows 11; Windows Security → App &amp;
+    browser control → Smart App Control), Windows refuses to start it:
+    "An Application Control policy has blocked this file". There is no
+    exception for a single program: either turn Smart App Control off
+    (on many Windows 11 versions it cannot be turned on again without
+    resetting Windows), or wait for the signed release.</li>
+<li>Otherwise SmartScreen may warn when the downloaded program is first
+    started ("Windows protected your PC": More info → Run anyway). To
+    avoid it, unblock the zip before unpacking it (Properties → Unblock,
+    or <code>Unblock-File</code> in PowerShell). Check the download against
+    <code>SHA256SUMS</code> (<code>Get-FileHash</code> in PowerShell) either way.</li>
 <li>Background mode: <code>--daemon</code>, <code>cavaminer stop</code> and SIGHUP are Unix.
   To keep the miner running, make a scheduled task that starts it at
   boot as your account, elevated and without a stored password (in an
@@ -2369,6 +2383,10 @@ window, logging off and shutting down stop it, with the GPUs restored;
 <tr>
 <td>the electricity page shows "no prices yet"</td>
 <td>the source answered nothing yet or needs a token or area: <code>cavaminer prices</code> prints the error, <code>cavaminer prices --list</code> the areas</td>
+</tr>
+<tr>
+<td>Windows: "An Application Control policy has blocked this file"</td>
+<td>Smart App Control blocks the unsigned program (see Windows); a signed release will follow</td>
 </tr>
 <tr>
 <td>Windows: power limits and clocks are refused, RandomX runs on normal pages</td>
