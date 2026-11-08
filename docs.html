@@ -1,0 +1,2389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CavaMiner — documentation</title>
+<meta name="description" content="CavaMiner documentation.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="./"><img src="logo.svg" alt="CavaMiner" height="40"></a><nav><a href="./">Home</a><a href="screenshots.html">Screenshots</a><a href="docs.html" class=on>Documentation</a><a href="releases.html">Releases</a></nav></div></header>
+<main class="wrap">
+<article class="card doc"><p><img src="logo.svg" alt="CavaMiner" width="300"></p>
+<p>CavaMiner is a cryptocurrency miner for <strong>PearlHash</strong> (Pearl, PRL) on
+NVIDIA GPUs and <strong>RandomX</strong> (Monero, XMR) on CPUs. One process can mine
+both.</p>
+<ul>
+<li><strong>Fast.</strong> Hand-written CUDA kernels for the RTX 30, 40 and 50 series,
+  within a few percent of the fastest closed-source miner; safe
+  auto-tuning, undervolting with self-checks, power sweeps.</li>
+<li><strong>Mines when power is cheap.</strong> Follows the electricity price from 38
+  sources in about 40 countries (Danish grid tariffs included), runs the
+  cheapest hours of the day, switches profiles on a cron schedule, and
+  pauses while other programs use a GPU.</li>
+<li><strong>Yours to watch and control.</strong> A terminal menu, a web interface with
+  your own dashboards and statistics, two-factor logins, a REST API,
+  Prometheus metrics and a Home Assistant integration. Every setting can be
+  changed from every one of them and from the command line.</li>
+<li><strong>Dev fee:</strong> 1 % of the PearlHash and of the RandomX mining time pays
+  for further development (details below).</li>
+</ul>
+<p>Status: beta. Linux and Windows on x86-64, with NVIDIA GPUs of the RTX 30,
+40 and 50 series (sm_86, sm_89, sm_120) and any x86-64 CPU; tested on the
+pools listed below. Downloads and this documentation:
+https://cavaminer.cavalius.net — bug reports and requests:
+https://github.com/cavalius/cavaminer/issues</p>
+<h2 id="requirements-and-installation">Requirements and installation</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linux</td>
+<td>x86-64 with glibc 2.17 or newer (any distribution of the last ten years); everything below works</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td>Windows 10 or 11, x64, one <code>cavaminer.exe</code>; PearlHash and RandomX mine as on Linux (see Windows below for what differs: large pages need a right of the account, there is no MSR tweak, no CPU clock cap and no CPU power reading)</td>
+</tr>
+<tr>
+<td>PearlHash</td>
+<td>An NVIDIA GPU of the RTX 30, 40 or 50 series and an NVIDIA driver 525 or newer (RTX 50 series: 575 or newer; 580 or newer runs the kernels built with CUDA 13, which are 1.7 % faster on the RTX 50 series). The CUDA toolkit is not needed: the kernels are inside the miner</td>
+</tr>
+<tr>
+<td>RandomX</td>
+<td>Any x86-64 CPU; AES and AVX2 help. 2 MiB huge pages, about 2.5 GB of memory</td>
+</tr>
+<tr>
+<td>Root / administrator</td>
+<td>Needed for everything that touches the hardware: power limits, clocks, the clock offset, huge pages, the MSR tweak and the CPU clock cap. Mining itself, the menu, the web interface and the statistics work without it</td>
+</tr>
+</tbody>
+</table>
+<p>Every release offers:</p>
+<table>
+<thead>
+<tr>
+<th>file</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cavaminer-&lt;version&gt;-linux-x86_64.tar.gz</code></td>
+<td>Linux, the full package: the miner, this README, the license and the third-party notices, and the Home Assistant integration</td>
+</tr>
+<tr>
+<td><code>cavaminer-&lt;version&gt;-linux-x86_64</code></td>
+<td>Linux, the bare binary; make it executable (<code>chmod +x</code>)</td>
+</tr>
+<tr>
+<td><code>cavaminer-&lt;version&gt;.tar.gz</code></td>
+<td>the HiveOS custom miner (see HiveOS below)</td>
+</tr>
+<tr>
+<td><code>cavaminer-&lt;version&gt;-windows-x86_64.zip</code></td>
+<td>Windows, the full package (<code>cavaminer.exe</code> and the same files)</td>
+</tr>
+<tr>
+<td><code>cavaminer-&lt;version&gt;-windows-x86_64.exe</code></td>
+<td>Windows, the bare program</td>
+</tr>
+</tbody>
+</table>
+<p><code>SHA256SUMS</code> lists the checksums: <code>sha256sum -c SHA256SUMS</code> (Linux) or
+<code>Get-FileHash</code> (PowerShell) checks a download. The full package unpacks
+anywhere:</p>
+<pre><code class="language-sh">tar xzf cavaminer-*-linux-x86_64.tar.gz
+cd cavaminer-*-linux-x86_64
+</code></pre>
+<p>On Windows, unpack the zip and open a terminal (Windows Terminal or
+PowerShell) in that folder; the examples below read <code>.\cavaminer.exe</code>
+for <code>./cavaminer</code>, and <code>sudo</code> means a terminal run as administrator.</p>
+<p>The miner keeps everything it writes next to its settings file
+(<code>cavaminer.toml</code> in the directory it is started from, or wherever
+<code>--config</code> points): the settings, statistics, users, tuning results and
+so on. Start it from a directory of its own.</p>
+<h2 id="quick-start">Quick start</h2>
+<pre><code class="language-sh">./cavaminer devices                                   # the GPUs it sees, numbered as nvidia-smi does
+sudo ./cavaminer                                      # first start: asks for pools and wallets, then mines
+sudo ./cavaminer -o de.pearl.herominers.com:1200 -u &lt;wallet&gt;.&lt;worker&gt;              # PearlHash on all GPUs
+sudo ./cavaminer --rx-url pool.supportxmr.com:3333 --rx-user &lt;wallet&gt;              # RandomX on the CPU
+sudo ./cavaminer -o &lt;host:port&gt; -u &lt;wallet&gt; --rx-url &lt;host:port&gt; --rx-user &lt;wallet&gt;   # both
+</code></pre>
+<p>PearlHash mining runs when a PearlHash pool is set (and GPUs are not
+<code>none</code>), RandomX mining when a RandomX pool is set. Started in a terminal,
+the miner shows its menu (Tab opens it, <code>?</code> shows the help, <code>q</code> quits);
+otherwise it writes log lines. The web interface is at
+http://127.0.0.1:4078/ on the same machine (Settings → Web interface opens
+it to the network). Ctrl-C, <code>q</code> in the menu or <code>cavaminer ctl stop</code> end it
+(<code>cavaminer stop</code> ends a <code>--daemon</code>); clocks and power limits go back to
+what they were.</p>
+<h2 id="running-the-miner">Running the miner</h2>
+<h3 id="first-start">First start</h3>
+<p>Started in a terminal without a settings file and without mining options
+(<code>./cavaminer</code> or <code>sudo ./cavaminer</code>), the miner asks what to mine:</p>
+<ul>
+<li>PearlHash on the NVIDIA GPUs: a pool from a list of tested pools
+  (HeroMiners, Kryptex, 2Miners, Suprnova, AlphaPool) or any address, TLS
+  where the pool offers it, the Pearl wallet, a worker name, backup pools.</li>
+<li>RandomX on the CPU: your own p2pool node or a public pool (SupportXMR,
+  HashVault, Nanopool, MoneroOcean, Kryptex, HeroMiners, C3Pool, or any
+  address), the Monero wallet, a worker name, backup pools.</li>
+</ul>
+<p>It shows the result, writes <code>cavaminer.toml</code> and starts mining; the menu,
+the web interface and the command line change the settings later. Esc or
+Ctrl-C at a question cancels without writing anything. Options that only
+choose where the settings are or how the output looks (<code>--config</code>,
+<code>--plain</code>, <code>--no-tui</code>, <code>--log</code>, <code>--log-file</code>, <code>--pid-file</code>) do not stop the
+questions; any mining option does.</p>
+<h3 id="settings-options-and-the-settings-file">Settings, options and the settings file</h3>
+<p>Everything the miner does is a setting with one name in all interfaces,
+for example <code>electricity.max_price</code> or <code>randomx.threads</code> (the complete
+list is in the reference at the end). Settings live in <code>cavaminer.toml</code>
+and are changed by the menu, the web interface, the API, Home Assistant
+and <code>cavaminer config set</code>; a running miner reads a changed file within
+seconds, and settings marked "restart" apply after a restart (menu →
+Restart, or <code>cavaminer ctl restart</code>).</p>
+<p>Options on the command line override the file for that run: <code>-o</code> and
+<code>--rx-url</code> replace the pool lists, <code>--set key=value</code> sets any setting (over
+the file and the profile in effect; the value stays out of the file when
+settings are saved during the run), and a <code>--power-max</code> given on the
+command line is a hard ceiling the menu cannot raise. Options set on the
+command line are marked "cmd line" in the menu and the web interface
+(<code>--set</code> values are not).</p>
+<h3 id="output-modes">Output modes</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>menu</td>
+<td>In a terminal (also inside tmux or screen) the miner shows its interactive menu; see The menu below</td>
+</tr>
+<tr>
+<td>log lines</td>
+<td>Without a terminal (a service, HiveOS, a pipe) or with <code>--no-tui</code>: status lines every 30 s (<code>--status-interval</code>, at least 5) and the log, with colours only when the output is a terminal and <code>NO_COLOR</code> is not set</td>
+</tr>
+<tr>
+<td><code>--plain</code></td>
+<td>Plain text everywhere: log lines without colours or other control codes, no menu, simple line prompts at the first start</td>
+</tr>
+<tr>
+<td><code>--quiet</code> (<code>--silent</code>)</td>
+<td>No output at all, in the foreground (only a fatal error at the start still goes to stderr); the log can still go to <code>--log-file</code></td>
+</tr>
+<tr>
+<td><code>--daemon</code></td>
+<td>In the background; see below</td>
+</tr>
+</tbody>
+</table>
+<p><code>--log</code> sets the log level (<code>info</code>, <code>debug</code>, <code>warn</code>, or filters such as
+<code>cavaminer=debug</code>); <code>--log-file</code> also writes the log to a file (always
+without colours).</p>
+<h3 id="background-mode">Background mode</h3>
+<p><code>--daemon</code> (<code>-B</code>, <code>--background</code>) runs the miner in the background: it
+detaches from the terminal, prints its process id and returns. The log
+goes to <code>--log-file</code> (default <code>cavaminer.log</code> next to the settings file)
+and the process id to <code>--pid-file</code> (default <code>cavaminer.pid</code>). The pools
+must be set already (the first-start questions need a terminal).</p>
+<pre><code class="language-sh">sudo ./cavaminer --daemon      # CavaMiner runs in the background (pid 12345); log: cavaminer.log …
+sudo ./cavaminer stop          # SIGTERM; waits until the GPUs are restored and the miner has exited
+sudo kill -HUP 12345           # restart with the saved settings
+</code></pre>
+<p>A second miner with the same pid file is refused.</p>
+<h3 id="as-a-systemd-service">As a systemd service</h3>
+<p>Under systemd, run the miner in the foreground with <code>--no-tui</code> (its log
+lines go to the journal, and systemd restarts it) from a directory of its
+own, so that its files stay together:</p>
+<pre><code class="language-ini">[Unit]
+Description=CavaMiner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/lib/cavaminer
+ExecStart=/opt/cavaminer/cavaminer --no-tui
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+</code></pre>
+<p>Set up the pools first (<code>cavaminer config set pools.pearl '[…]'</code> in that
+directory, or run the miner there once in a terminal), or give them on the
+command line. <code>cavaminer ctl status</code> and the web interface work as usual.</p>
+<h3 id="hiveos">HiveOS</h3>
+<p>The HiveOS package (<code>cavaminer-&lt;version&gt;.tar.gz</code>) is a custom miner:
+in the flight sheet choose "Custom" as the miner, give the package's
+download URL as the installation URL, and fill in:</p>
+<table>
+<thead>
+<tr>
+<th>flight sheet field</th>
+<th>becomes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pool URL</td>
+<td><code>-o &lt;url&gt;</code> (several, comma-separated, for failover)</td>
+</tr>
+<tr>
+<td>Wallet and worker template</td>
+<td><code>-u &lt;template&gt;</code>, e.g. <code>%WAL%.%WORKER_NAME%</code> (the worker name is the rig's name)</td>
+</tr>
+<tr>
+<td>Pass</td>
+<td><code>-p &lt;password&gt;</code> (optional)</td>
+</tr>
+<tr>
+<td>Extra config arguments</td>
+<td>any further options, separated by <code>;</code>, e.g. <code>--mem-clock 5001;--power-limit 220</code></td>
+</tr>
+</tbody>
+</table>
+<p>The miner then runs with log output and reports its hashrate (as kH/s of
+the pool's unit), temperatures, fans and shares to the HiveOS agent through
+<code>http://127.0.0.1:4078/summary</code>. Leave the clocks and power limits to
+HiveOS' overclocking profiles there: the miner's own clock locks would be
+reset when it exits. The package has not yet been tested on a HiveOS rig;
+reports are welcome.</p>
+<h3 id="windows">Windows</h3>
+<p><code>cavaminer.exe</code> is the same miner: the menu in Windows Terminal or
+PowerShell, the web interface, the API, every setting and command. Run it
+in a terminal opened as administrator for power limits, clocks, the clock
+offset and large pages; without that it mines with the driver's settings.
+What differs from Linux:</p>
+<ul>
+<li>Background mode: <code>--daemon</code>, <code>cavaminer stop</code> and SIGHUP are Unix.
+  To keep the miner running, make a scheduled task that starts it at
+  boot as your account, elevated and without a stored password (in an
+  administrator PowerShell; the task runs <code>cavaminer.exe --no-tui</code> in the
+  miner's folder, and <code>cavaminer ctl stop</code> / <code>ctl restart</code> control it):</li>
+</ul>
+<pre><code class="language-powershell">$a = New-ScheduledTaskAction -Execute 'C:\cavaminer\cavaminer.exe' -Argument '--no-tui --log-file cavaminer.log' -WorkingDirectory 'C:\cavaminer'
+$p = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Highest
+$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Days 3650) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskName cavaminer -Action $a -Principal $p -Settings $s -Trigger (New-ScheduledTaskTrigger -AtStartup)
+Start-ScheduledTask -TaskName cavaminer
+</code></pre>
+<ul>
+<li>RandomX large pages (the 2 MiB pages of Linux) need the right "Lock
+  pages in memory" for your account: <code>cavaminer hugepages --persist</code> as
+  administrator grants it (Local Security Policy → User Rights
+  Assignment), and it applies after logging in again. <code>cavaminer
+  hugepages</code> shows whether the account has it. 1 GiB pages are Linux only.</li>
+<li>Not available on Windows: the MSR tweak (it needs a kernel driver), the
+  maximum CPU clock and the CPU clock sweep (cpufreq), the CPU's package
+  power (RAPL); Linux hashrates with the MSR tweak are 4–12 % higher.</li>
+<li>Auto-pause matches programs by their program name (not the command
+  line); <code>cavaminer gpu-procs</code> shows the names as the miner sees them.</li>
+<li>An electricity price <code>command</code> runs through <code>cmd /C</code>.</li>
+<li>The HiveOS package is Linux only. Everything else, including the files
+  next to the settings file and the Home Assistant integration, is the
+  same.</li>
+</ul>
+<h2 id="pools">Pools</h2>
+<h3 id="pool-lists-and-failover">Pool lists and failover</h3>
+<p>Each algorithm has an ordered list of pools, each with its own login. The
+first enabled pool is used; after two failed connections in a row the
+miner moves to the next one, and while it is on a backup pool it tries the
+first one again every 5 minutes (every 30 minutes when that pool had
+rejected it) and goes back as soon as it answers. In the settings file
+(or the menu: Mining → PearlHash pools / RandomX pools, or the web
+interface: Pools):</p>
+<pre><code class="language-toml">[[pools]]                        # PearlHash
+url = &quot;de.pearl.herominers.com:1200&quot;
+user = &quot;&lt;wallet&gt;.&lt;worker&gt;&quot;
+[[pools]]
+url = &quot;backup.example:1200&quot;
+user = &quot;&lt;wallet&gt;.&lt;worker&gt;&quot;
+enabled = false                  # kept in the list, not used
+
+[[randomx.pools]]                # RandomX
+url = &quot;p2pool.lan:3333&quot;
+user = &quot;rig1+450000&quot;
+</code></pre>
+<p><code>-o</code> / <code>--rx-url</code> on the command line replace the lists; <code>-u</code>, <code>-p</code>, <code>-w</code>
+(<code>--rx-user</code>, <code>--rx-pass</code>) fill in the login of pools that have none.
+Settings files with the older <code>[pool] url = [...]</code> form are converted when
+loaded. A profile can have pool lists of its own.</p>
+<h3 id="tls">TLS</h3>
+<p><code>stratum+ssl://host:port</code> (or <code>stratum+tls://</code>, <code>ssl://</code>, <code>tls://</code>)
+connects with TLS. The certificate is checked against the built-in
+Mozilla root store and the log says whether it verified, with its SHA-256
+fingerprint. As in other miners, a certificate that does not verify
+(self-signed, or issued for another host name) still gives an encrypted
+connection; to accept only one certificate, pin it:</p>
+<pre><code class="language-toml">[[randomx.pools]]
+url = &quot;stratum+ssl://pool.supportxmr.com:443&quot;
+user = &quot;&lt;wallet&gt;&quot;
+fingerprint = &quot;58c7896fcaef14dbc0aa8a92fe5b297dabd9fa5912d21647ec854a499b3d6486&quot;
+</code></pre>
+<h3 id="pearlhash-pools">PearlHash pools</h3>
+<p>Tested on 2026-09-30 (shares accepted unless noted):</p>
+<table>
+<thead>
+<tr>
+<th>pool</th>
+<th>address (TLS)</th>
+<th>login</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HeroMiners</td>
+<td><code>de.pearl.herominers.com:1200</code> (TLS on the same port; certificate for <code>pearl.herominers.com</code>)</td>
+<td><code>wallet.worker</code></td>
+</tr>
+<tr>
+<td>Kryptex</td>
+<td><code>prl-eu.kryptex.network:7048</code> (TLS <code>:8048</code>; also <code>prl-us</code>, <code>-sg</code>, …)</td>
+<td><code>wallet/worker</code></td>
+</tr>
+<tr>
+<td>2Miners</td>
+<td><code>prl.2miners.com:1818</code> (TLS <code>:11818</code>)</td>
+<td><code>wallet.worker</code></td>
+</tr>
+<tr>
+<td>Suprnova</td>
+<td><code>prl.suprnova.cc:3373</code> (TLS <code>:3374</code>)</td>
+<td><code>wallet.worker</code></td>
+</tr>
+<tr>
+<td>AlphaPool</td>
+<td><code>eu1.alphapool.tech:5571</code> (plain TCP; also <code>us1</code>, <code>us2</code>, <code>ru1</code>, <code>sg1</code>; <code>:5566</code> is their own miner's protocol)</td>
+<td><code>wallet.worker</code>; <code>wallet+nacr1….worker</code> merge-mines NACRE</td>
+</tr>
+<tr>
+<td>K1Pool</td>
+<td><code>eu.pearl.k1pool.com:3360</code></td>
+<td>K1Pool account <code>Kr_….worker</code></td>
+</tr>
+</tbody>
+</table>
+<p>The login is <code>wallet.worker</code> (or <code>wallet/worker</code>); <code>-w</code> / a pool's
+<code>worker</code> field overrides the worker part. Shares are sent compressed
+(<code>plain_proof_zst</code>, about 3 KB); 2Miners, Suprnova, K1Pool and Kryptex take
+only uncompressed proofs (about 136 KB), so the miner switches to
+<code>plain</code> for such a pool after its first rejection, or when a compressed
+share gets no answer for 15 s (Kryptex ignores them), and sends the waiting
+shares again. <code>pool.proof = "plain"</code> (<code>--proof plain</code>) makes that the
+default.</p>
+<p>A pool password other than the default <code>x</code> (<code>password</code> in a pool entry,
+<code>-p</code>) goes to the pool with the login. AlphaPool reads options there:
+<code>x;d=N</code> pins the share difficulty (their table: 131072 for an RTX 3070,
+262144 for a 3090, 1048576 for a 5090; several GPUs on one rig share one
+connection, so add them up; far lower values such as 4096 are refused at
+login) and <code>;t=N</code> the payout threshold in PRL (for the whole wallet).
+Without <code>d=</code> their vardiff starts at about a twentieth of a 5090's
+difficulty and takes minutes to settle. Merge mining NACRE needs nothing
+from the miner but the <code>+nacr1…</code> address after the wallet. Tested again on
+2026-10-22 (static difficulty and merge mining, Linux and Windows):</p>
+<pre><code class="language-toml">[[pools]]
+url = &quot;eu1.alphapool.tech:5571&quot;
+user = &quot;&lt;wallet&gt;+&lt;nacr address&gt;.&lt;worker&gt;&quot;
+password = &quot;x;d=1048576&quot;
+</code></pre>
+<p>Not supported: PearlFortune (its own protocol with client certificates),
+pearlhash.xyz (closes the connection on any stratum message), PullSignal
+(logs in but sent no jobs in our tests).</p>
+<h3 id="randomx-pools">RandomX pools</h3>
+<p>RandomX works with the xmrig/p2pool dialect (<code>login</code>/<code>job</code>/<code>submit</code>,
+<code>keepalived</code>) that Monero pools use: p2pool (plain <code>host:3333</code>, also the
+mini and nano sidechains), SupportXMR (<code>pool.supportxmr.com:3333</code>, TLS
+<code>:443</code>), HashVault, Nanopool, MoneroOcean, Kryptex, HeroMiners, C3Pool and
+the others speaking the same protocol. The login is the wallet address
+(for p2pool any name; <code>name+N</code> fixes the share difficulty at N) and the
+password usually the worker name. The login asks for <code>rx/0</code> and <code>rx/2</code>
+only, so algorithm-switching pools such as MoneroOcean send RandomX jobs.</p>
+<h3 id="randomx-v2">RandomX v2</h3>
+<p>Monero's next hard fork (FCMP++) changes its proof of work to RandomX v2
+(<code>rx/2</code>): longer programs, AES in the main loop, and shares judged by a
+commitment (a Blake2b hash of the block blob and its RandomX hash). The
+date is not set yet. CavaMiner mines both versions and follows each job's
+<code>algo</code>: when your pool switches to <code>rx/2</code> at the fork, the miner switches
+with it, without an update and without rebuilding the dataset (both
+versions use the same one); the log says "the pool asks for RandomX v2",
+and the menu and the web dashboard show "RandomX v2". Shares are submitted
+the way xmrig 6.26 does. Your pool must support the fork as well and
+name <code>rx/2</code> in its jobs (as xmrig expects too: a job without <code>algo</code> is
+mined as <code>rx/0</code>); if you run your own P2Pool, it needs P2Pool v5 by then,
+and P2Pool v5 pays main addresses only (no subaddresses). <code>cavaminer rx-bench --v2</code>
+measures your CPU on v2 now (compare with xmrig 6.26 or newer, <code>-a rx/2</code>).</p>
+<h2 id="gpus-pearlhash">GPUs (PearlHash)</h2>
+<h3 id="gpu-numbers-and-saved-settings">GPU numbers and saved settings</h3>
+<p>A GPU's number (GPU0, GPU1, …) is its place on the PCI bus, the order of
+<code>nvidia-smi</code> and of <code>cavaminer devices</code>, and the same everywhere: <code>-d</code>,
+the menu, the web interface, the API, the logs, <code>/summary</code> and Prometheus.
+A card added in a slot before the others shifts the numbers, but the
+saved settings belong to the cards: each GPU's power limit, clocks and
+offset are saved with its UUID (which stays with the card) and its slot
+(PCI address), and checked at every start:</p>
+<ul>
+<li>the same card in the same slot keeps its settings;</li>
+<li>a card moved to another slot takes them along (<code>miner.follow_gpus</code>,
+  default on; off, the settings stay with the slot);</li>
+<li>a new card of the same model in a slot gets that slot's settings;</li>
+<li>a card of another model never gets the settings of the card that was in
+  its slot before;</li>
+<li>settings of cards no longer in the machine stay in the file, for when
+  they come back.</li>
+</ul>
+<p>What changed is logged and saved (also in the profiles); <code>cavaminer
+devices</code> shows each GPU's number, PCI address and UUID, the settings it
+gets and what the next start would change.</p>
+<h3 id="power-limit-ceiling-and-clocks">Power limit, ceiling and clocks</h3>
+<p>Each GPU has (per profile):</p>
+<table>
+<thead>
+<tr>
+<th>setting</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>power limit</td>
+<td>set before mining starts (<code>--power-limit</code>); on exit the lower of the original and the requested limit stays, so it is never raised behind your back</td>
+</tr>
+<tr>
+<td>ceiling (<code>power_max</code>)</td>
+<td>a hard limit nothing (sweeps, tuning, the menu) ever goes above; default the power limit given, else the limit the GPU had at start</td>
+</tr>
+<tr>
+<td>memory clock</td>
+<td>locked while mining (<code>--mem-clock</code>); PearlHash needs little memory bandwidth, so a low memory clock gives the cores more of the power budget (see Tuning)</td>
+</tr>
+<tr>
+<td>GPU clock</td>
+<td>locked while mining (<code>--gpu-clock</code>); power and thermal limits still apply</td>
+</tr>
+<tr>
+<td>clock offset</td>
+<td>the voltage/frequency curve's offset (<code>--gpu-offset</code>, undervolting; see Tuning)</td>
+</tr>
+<tr>
+<td>clock cap (<code>gpu_clock_max</code>)</td>
+<td>the highest GPU clock; unlike a lock the clock can still drop. Saved with an offset, so a light load cannot boost the GPU to clocks the offset was never tested at</td>
+</tr>
+</tbody>
+</table>
+<p>On the command line each takes one value for all GPUs or a comma-separated
+list, one per GPU in <code>-d</code> order; the menu (Mining → GPUs), the web
+interface (Settings) and the API apply them at once. The menu and the web
+interface offer the clocks the driver supports and the power range it
+allows. All of them need root and are reset when the miner exits.</p>
+<h3 id="hashrate">Hashrate</h3>
+<p>PearlHash hashrate is reported in the pool's unit, int8
+multiply-accumulates per second (TH/s = 10¹² MAC/s); RandomX in hashes per
+second. Efficiency is hashes per joule, shown as GH/W (PearlHash) or H/W
+(RandomX).</p>
+<h2 id="randomx-on-the-cpu">RandomX on the CPU</h2>
+<h3 id="threads-and-cpus">Threads and CPUs</h3>
+<p>The RandomX dataset needs 2 MiB of cache per hashing thread to run at full
+speed, so by default the miner takes the number of threads from the
+caches: per L3 cache one thread per 2 MiB of L3, plus one per L2 cache of
+2 MiB or more where the L3 does not hold copies of the L2s (recent
+Intel), at least one per core where a core's L2 and its share of the L3
+hold 2 MiB (Xeon Scalable), and at most one per logical CPU. The threads
+are spread over the L3 caches by what they hold, one per core first, then
+the SMT siblings, and pinned to their CPUs at the lowest priority (<code>nice</code>
+19), so the GPU feeding and the rest of the system go first.</p>
+<p>Other choices: a number of threads in all (<code>randomx.threads</code>), a number on
+every socket (<code>randomx.threads_per_socket</code>), or the CPUs themselves
+(<code>randomx.affinity</code>, e.g. <code>0-15,64-79</code>; with it, <code>auto</code> threads means one
+per listed CPU). In the menu (Mining → RandomX settings, Enter on Threads,
+Threads per socket or CPUs) and in the web interface (Settings → RandomX,
+"Choose CPUs…") a picture of the CPU shows every socket, its L3 caches
+(with the threads each holds) and the cores with their logical CPUs: choose
+automatic, a number in all or per socket (the picture shows which CPUs the
+miner picks), or switch CPUs, cores, L3 caches and sockets on and off
+yourself; the CPU list follows. <code>GET /api/v1/cpu</code> and <code>GET /api/v1/cpu/plan</code>
+give the same to scripts.</p>
+<p>On machines with several NUMA nodes (servers with two or more sockets)
+each node with hashing threads gets its own dataset in its own memory,
+and the threads read their node's: twice the memory and huge pages (or
+three 1 GiB pages per node), but no reads across sockets.</p>
+<h3 id="huge-pages">Huge pages</h3>
+<p>The dataset (2080 MiB), the cache (256 MiB) and each thread's scratchpad
+(2 MiB) want 2 MiB huge pages: 1040 + 128 + one per thread. Started as
+root, the miner reserves the missing ones itself (memory is compacted
+first if the kernel finds too few) and leaves them reserved for the next
+start, as xmrig does; without root it says which command reserves them.
+<code>cavaminer hugepages</code> shows what is needed and reserves it (as root);
+<code>sudo cavaminer hugepages --persist</code> also writes
+<code>/etc/sysctl.d/60-cavaminer-hugepages.conf</code>, so they are reserved at boot,
+before memory fragments. Without reserved huge pages the dataset asks for
+transparent huge pages (THP <code>always</code> or <code>madvise</code>), which recovers part of
+the loss. With <code>randomx.pages_1gb</code> (<code>--rx-1gb-pages</code>) the dataset goes on
+three 1 GiB pages (reserved at start as root; at boot: <code>hugepagesz=1G
+hugepages=3</code> on the kernel command line).</p>
+<h3 id="msr-tweak">MSR tweak</h3>
+<p>As root on AMD Zen 2 to Zen 5 (Zen 4: the Ryzen 7000 desktop and 7040 /
+8040 mobile parts; other Zen 4 models are left alone) and on Intel CPUs
+the miner sets the few prefetch-related CPU registers that xmrig's "MSR
+mod" sets (+11 % on a Zen 2 Threadripper, +4 % on Zen 3 to 5, +8–12 % on
+Intel) and restores them on exit. <code>randomx.msr = false</code> (<code>--rx-msr false</code>) leaves them alone.</p>
+<h3 id="maximum-cpu-clock">Maximum CPU clock</h3>
+<p>RandomX loses less hashrate than power at lower clocks, so a clock cap
+often pays: a Ryzen 9 9950X keeps 91 % of its hashrate at 4000 MHz with
+60 % more hashes per joule, a 7950X 95 % at 4500 MHz (+47 %), a
+Threadripper PRO 3995WX 91 % at 2600 MHz (+23 %); a CPU already held back
+by a power limit (such as an Intel at 65 W) gains nothing.
+<code>randomx.max_freq</code> (<code>--rx-max-freq</code>; Settings → RandomX → Maximum CPU
+clock) sets cpufreq's maximum on every CPU while RandomX mines (Linux, as
+root) — all of them, also the ones without a hashing thread: the cores
+share their supply voltage, so one uncapped core that boosts for other
+work raises the voltage and power of the capped ones (a 3995WX mining on
+64 of its 126 threads at 2000 MHz: 286 W with only the mining cores
+capped, 187 W with all). With acpi-cpufreq (older Ryzen without
+amd-pstate) there are only the P-states, and the boost clocks above them
+ignore the limit, so a cap also turns boost off (per core where the
+kernel allows, else for all CPUs): a Ryzen 9 5950X then runs at its
+3400 MHz base clock, 92 % of the hashrate with 21 % more hashes per
+joule. The original limits come back when mining stops, while it is
+paused and after a crash. With profiles and a schedule the cap can depend
+on the time of day or the electricity price; the setting applies at
+once. Tuning → CPU clock sweep measures your CPU (see Tuning);
+<code>cavaminer --rx-max-freq 4000 rx-bench</code> tests one value offline.</p>
+<h2 id="tuning">Tuning</h2>
+<p>PearlHash is compute-bound: under a power limit, every watt the memory
+does not use goes to the GPU cores. Locking the memory clock low raises
+the hashrate at the same power — on an RTX 3090 at 250 W, 5001 MHz instead
+of 9501 MHz gives about +20 % — and the GPU clock lock, the power limit
+and the clock offset each move the balance between hashrate and watts.
+The miner measures all of them for you, while it keeps mining.</p>
+<h3 id="auto-tune-safe-range">Auto-tune (safe range)</h3>
+<p><code>--autotune</code> finds the most efficient setting (hashes per watt) on its
+own, while mining (about 10 minutes; needs root):</p>
+<pre><code class="language-sh">sudo ./cavaminer --autotune --power-limit 450 -o ... -u ...
+</code></pre>
+<p>It measures the driver's default memory clock and every supported memory
+clock from 30 to 90 % of the highest at the natural GPU clock, then GPU
+clock locks stepping down from the natural clock until the efficiency
+falls twice in a row, then the other memory clocks at the best lock, and
+measures the two best settings again. The most efficient setting wins
+(settings within 1 % count as equal; the faster one is chosen) and is
+kept. It stays in the safe range: only clocks the driver lists as
+supported (stock voltage curve, no offsets), the power limit is never
+raised, and it stops if a GPU comes within 5 °C of its slowdown
+temperature. <code>--tune-min-hashrate 90</code> never picks a setting below 90 % of
+the best measured hashrate; <code>--tune-window</code> is the seconds per setting
+(default 20).</p>
+<p>The menu (Tuning → Auto-tune) and the web interface (Tuning) run it while
+the miner keeps going, and also a <strong>scan</strong>: an auto-tune at each of
+several power limits, from the GPU's ceiling (never above it) down to 60 %
+of it in five levels, unless you choose the range and step (about 8
+minutes per power limit). The best setting of all is applied with its
+power limit and saved in the running profile. Every run is kept (the
+latest 20 per GPU in <code>cavaminer-tune.json</code>) with all the settings it
+measured: the results show while a run goes and afterwards (the run whose
+setting is applied, or an older one), as a table and as bars of power,
+hashrate and efficiency, sorted as you like, and any measured setting can
+be applied (power limit, memory clock and GPU lock, saved). In the menu: ↓
+past "Start" into the results, <code>[</code> <code>]</code> older and newer runs, <code>o</code> sort, <code>g</code>
+bars, Enter applies the selected setting, <code>c</code> cancels a running tune.</p>
+<h3 id="power-sweeps">Power sweeps</h3>
+<p>A sweep measures hashrate and efficiency at every power limit from the
+GPU's lowest to its highest (at most the ceiling) in 5 W steps, 16 s per
+point plus half as long to settle, while mining; afterwards the limit
+returns to its setting. <code>--sweep</code> (with <code>--sweep-min</code>, <code>--sweep-max</code>,
+<code>--sweep-step</code>, <code>--sweep-window</code>) runs one without the menu; the menu
+(Tuning → Power sweep, results under Sweep results with a table and
+graphs; Enter sets a power limit, <code>k</code> jumps to the knee) and the web
+interface (Tuning, with a chart and "Set limit") run it while mining. The
+latest sweep per GPU is kept in <code>cavaminer-sweeps.json</code>, so the curves can
+be viewed later without sweeping again. The suggested <em>knee</em>: going up in
+power, the last limit where the extra watts still earn at least 35 % of
+the average efficiency.</p>
+<h3 id="clock-offset-undervolting">Clock offset (undervolting)</h3>
+<p>Outside the safe range: a positive offset of the voltage/frequency curve
+runs each clock at a lower voltage, so within a power limit the GPU clocks
+higher (two RTX 5090s at 500 W: +9 %; an RTX 3070 at 195 W: +6 %). Too
+much offset makes the GPU compute wrong results, and at clocks it was
+never tested at it can hang (a reboot is then needed). <code>--autotune-offset</code>
+finds the offset per GPU while mining (about 15 minutes; needs root):</p>
+<pre><code class="language-sh">sudo ./cavaminer --autotune-offset
+</code></pre>
+<p>With the GPU at its power limit it raises the offset in 50 MHz steps
+(<code>--offset-step</code>, up to <code>--offset-max</code>, default 1000) with frequent
+self-checks: every eighth attempt is computed twice and all its tile
+hashes compared, so a computing error shows as a mismatch. The first
+offset with a mismatch ends the search; the highest good one less
+<code>--offset-margin</code> (50 MHz) is confirmed for two minutes and saved in the
+settings with a clock cap 2 % above the clock it ran at (<code>gpu_offset</code>,
+<code>gpu_clock_max</code>), so that a light load cannot boost the GPU to untested
+clocks. Offsets being tried are written to <code>cavaminer-offset-trial.json</code>
+first: after a hang, the next search stays below that offset; the results
+go to <code>cavaminer-offsets.json</code>.</p>
+<p>While mining with an offset, one attempt in 1024 is checked
+(<code>--self-check</code>); a failed check lowers the offset by one step and saves
+it (in the running profile when that profile sets the offset, else in the
+base settings). The miner also re-applies the clock cap or lock within a second
+whenever the clock runs above it (for example after an <code>nvidia-smi -rgc</code>
+from outside) and removes the offset if it cannot. Auto-pause gives other
+programs the driver's clocks (no offset, no locks) and restores the tuning
+on resume. Run the offset search where the machine can be restarted.</p>
+<h3 id="cpu-clock-sweep-randomx">CPU clock sweep (RandomX)</h3>
+<p>In the menu (Tuning → CPU clock sweep) or the web interface (Tuning) the
+miner measures the RandomX hashrate, the CPU package power and the clock
+while it keeps mining: first with no cap, then with the maximum CPU clock
+stepped down from just below that clock (250 MHz steps by default, down to
+60 % of it, at least 2000 MHz; acpi-cpufreq: its P-states, each with boost
+off), about 35 s per point. All CPUs are capped (they share their voltage,
+see RandomX above); afterwards the cap returns to its setting. The result
+is kept (<code>cavaminer.cpusweep.json</code>) with three suggestions: the highest
+hashrate, the best compromise (the most hashes per joule with at least
+90 % of the highest hashrate) and the best efficiency; "Use" (Enter in the
+menu) makes a point's clock the maximum CPU clock of the running profile,
+which applies at once. Where GPUs mine too, look at their hashrate after a
+low cap: feeding them runs on the same CPU. Needs root and the CPU package
+power (RAPL). API: <code>GET/POST/DELETE /api/v1/cpu/sweep</code>.</p>
+<h3 id="what-is-reset-when-the-miner-stops">What is reset when the miner stops</h3>
+<p>The miner resets the clock locks and offsets when it exits (Ctrl-C,
+SIGTERM, SIGHUP, a crash); the power limit ends at the lower of its
+original and requested value, so it is never raised behind your back; the
+CPU clock cap and the MSR registers go back to their values. After a hard
+crash, <code>sudo nvidia-smi -rmc</code> and <code>sudo nvidia-smi -rgc</code> reset the locks;
+a clock offset left behind is reset when the next run that sets one
+(<code>gpu_offset</code>, or <code>--gpu-offset 0</code>) exits.
+Power limits are lost when the driver unloads an idle GPU unless
+persistence mode is on (<code>sudo nvidia-smi -pm 1</code>). If an overclocking tool
+already manages clocks (HiveOS OC profiles, for example), use that
+instead: the miner's reset on exit would undo it.</p>
+<h2 id="profiles-and-schedule">Profiles and schedule</h2>
+<p>A profile is a named set of settings over the base ones; it stores only
+what differs: which GPUs mine (<code>none</code> turns GPU mining off), power limits
+and clocks per GPU, the RandomX threads, CPUs, priority and clock cap,
+<code>randomx.enabled = false</code>, pools, anything the settings screen lists. In
+the settings file:</p>
+<pre><code class="language-toml">[profiles.night.randomx]
+threads = 32
+[[profiles.night.gpu]]
+uuid = &quot;GPU-…&quot;
+power_limit = 500.0
+
+[profiles.day.miner]
+devices = &quot;none&quot;          # no GPU mining during the day
+[profiles.day.randomx]
+max_freq = 4000           # and a CPU clock cap
+
+[[schedule]]
+cron = &quot;0 22 * * *&quot;       # minute hour day month weekday (local time)
+profile = &quot;night&quot;
+[[schedule]]
+cron = &quot;0 7 * * mon-fri&quot;
+profile = &quot;day&quot;
+</code></pre>
+<p>Time specs are cron's (<code>*</code>, <code>*/n</code>, ranges, lists, month and weekday
+names, <code>@daily</code> …). The profile of the entry that fired last runs, so the
+right one also applies after a restart; a profile chosen in the menu, the
+web interface or the API holds until the next scheduled change;
+<code>--profile</code> overrides both. On a change the miner restarts itself with the
+new settings (a few seconds, plus the RandomX dataset). The electricity
+price can also switch to a profile (below). Menu: Automation → Profiles &amp;
+schedule; web interface: Automation; command line: <code>cavaminer config set
+… --profile night</code>.</p>
+<h2 id="auto-pause">Auto-pause</h2>
+<p>Mining pauses while other programs use a GPU, and resumes once they have
+been idle for a while:</p>
+<pre><code class="language-toml">[[autopause]]
+processes = [&quot;ollama&quot;, &quot;vllm&quot;, &quot;llama-server&quot;]   # parts of names or command lines; [&quot;*&quot;] = any other program
+threshold = 10        # GPU (SM) use in % that counts as activity (default 10)
+combine = &quot;sum&quot;       # &quot;sum&quot; (default): the matching programs' use added up; &quot;max&quot;: the busiest one alone
+pause_after = 30      # seconds the use must stay at the threshold before mining pauses (default 0 = at once)
+resume_after = 600    # seconds without activity before mining resumes (default 300)
+interval = 5          # seconds between checks (default 5)
+gpus = &quot;same&quot;         # &quot;same&quot; (default): the GPU the program uses; &quot;all&quot;: every GPU
+cpu = false           # also pause RandomX (default false)
+power_limit = 575.0   # optional: power limit while paused, the mining one returns on resume
+</code></pre>
+<p>A paused GPU frees its memory for the other program and gets the driver's
+default clocks. The per-program use comes from NVML (as <code>nvidia-smi pmon</code>;
+each program's highest use since the previous check); <code>cavaminer gpu-procs
+[seconds]</code> lists the programs using each GPU and how much, for writing
+triggers. Triggers are edited in the menu (Automation → Auto-pause, one
+line of <code>key=value</code> pairs), the web interface (Automation) and the API, and
+apply at once.</p>
+<p>A pause for the price, by auto-pause and by you (<code>P</code> in the menu, "Pause"
+in the web interface, <code>cavaminer ctl pause</code>) each hold on their own: the
+miner resumes only when none of them pauses it. Your own pause is kept
+across restarts until you resume.</p>
+<h2 id="electricity-price">Electricity price</h2>
+<p>Mining can follow the electricity price: it runs while the price is low
+enough and pauses (or runs another profile) while it is high. Prices come
+from a provider (day-ahead spot markets and dynamic tariffs in about 40
+countries, below), from a URL or from a command of your own. The price
+compared is what you pay per kWh:</p>
+<pre><code>(spot × factor + markup + time-of-day tariffs [+ Danish grid tariffs]) × (1 + VAT/100)
+</code></pre>
+<p>Mining runs while that is at most <code>max_price</code> and/or during the
+<code>cheapest_hours</code> cheapest hours of each day (in the market's time zone);
+otherwise <code>action</code> applies: <code>pause</code> (all mining, the default),
+<code>pause-gpus</code>, <code>pause-cpu</code>, or <code>profile:&lt;name&gt;</code> (the miner restarts into
+that profile while the price is high, a few seconds plus the RandomX
+dataset; pausing is instant and frees the GPUs' memory).</p>
+<pre><code class="language-toml">[electricity]
+provider = &quot;energidataservice&quot;   # cavaminer prices --list shows all
+area = &quot;DK2&quot;
+grid = &quot;radius&quot;                  # Denmark: + grid tariff, Energinet's tariffs and the electricity tax
+markup = 0.0                     # supplier markup per kWh
+vat = 25.0
+max_price = 1.50                 # DKK/kWh incl. all of the above
+cheapest_hours = 4               # and the 4 cheapest hours of each day anyway
+action = &quot;pause&quot;
+</code></pre>
+<p>With <code>grid</code> (31 Danish grid companies: <code>radius</code>, <code>cerius</code>, <code>n1</code>,
+<code>konstant</code>, <code>trefor</code>, <code>trefor-oest</code>, <code>dinel</code>, <code>rah</code>, <code>elnet-midt</code>, <code>noe</code>, …)
+the price is what a Danish household pays: the grid company's hourly C
+tariff plus Energinet's transmission and system tariffs and the
+electricity tax, from Energi Data Service, refreshed twice a day. Other
+examples:</p>
+<pre><code class="language-toml">[electricity]                    # Sweden, Nord Pool, 15-min prices in SEK
+provider = &quot;nordpool&quot;
+area = &quot;SE3&quot;
+currency = &quot;SEK&quot;
+markup = 0.80                    # energy tax, grid fee, markup per kWh
+vat = 25.0
+max_price = 1.20
+
+[electricity]                    # any European bidding zone, with a free ENTSO-E token
+provider = &quot;entsoe&quot;
+area = &quot;DE-LU&quot;
+token = &quot;…&quot;
+tariffs = [{ when = &quot;* 17-20 * * *&quot;, price = 0.08 }]   # cron time of the interval start; each match is added
+
+[electricity]                    # Great Britain, Octopus Agile (price incl. VAT)
+provider = &quot;octopus-agile&quot;
+area = &quot;C&quot;                       # region letter
+max_price = 0.15
+</code></pre>
+<p><code>max_price</code> alone mines whenever the price is at most the limit;
+<code>cheapest_hours</code> alone mines the cheapest N hours of every day; with both,
+either is enough. <code>missing = "pause"</code> treats an unknown price as too
+expensive (the <code>action</code> applies) while no price is known for now
+(default: mine). <code>timezone</code> overrides the market's time zone for the
+tariff times and the days of <code>cheapest_hours</code>. <code>enabled = false</code> keeps the
+settings without using them.</p>
+<p><strong>Your own source</strong>: <code>provider = "url"</code> with <code>url = "https://…"</code>, or
+<code>provider = "command"</code> with <code>command = "…"</code> (run with <code>sh -c</code>, 60 s limit).
+The answer is either a number (the price now, polled every <code>interval</code>
+minutes, default 5), <code>{"price": 1.23}</code>, or a list of intervals:</p>
+<pre><code class="language-json">[{&quot;start&quot;: &quot;2026-10-11T12:00:00Z&quot;, &quot;end&quot;: &quot;2026-10-11T13:00:00Z&quot;, &quot;price&quot;: 0.42},
+ {&quot;start&quot;: 1791723600, &quot;price&quot;: 0.39}]
+</code></pre>
+<p>(also as <code>{"prices": [...]}</code>; times in RFC 3339 or Unix seconds; <code>end</code>
+defaults to the next start, or to the list's step when the next start is
+further away.) The same additions and VAT apply.</p>
+<p>Day-ahead prices are fetched every 10 minutes from 12:45 market time until
+tomorrow's are in, otherwise every 6 hours; real-time sources every 5
+minutes; after a failure the miner tries again after 1, 2, 5, 10, 20 and
+then every 30 minutes. Prices are cached in <code>cavaminer.prices.json</code>, so a
+restart decides at once and a short outage of the source does not matter.
+The menu (Automation → Electricity price, shortcut <code>e</code>) and the web
+interface (Electricity) show the price now, the decision and until when
+it holds, a chart of today and tomorrow (green = mining) and all the
+settings (applied at once); <code>cavaminer prices</code> prints the coming intervals
+with the settings applied, <code>cavaminer prices --list</code> the providers and
+the Danish grid companies.</p>
+<table>
+<thead>
+<tr>
+<th>provider</th>
+<th>source</th>
+<th>region</th>
+<th>currency</th>
+<th>token</th>
+<th>price</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>energidataservice</code></td>
+<td>Energi Data Service (Energinet)</td>
+<td>Denmark (also DE, NO2, SE3, SE4)</td>
+<td>DKK/EUR</td>
+<td></td>
+<td>day-ahead spot, 15 min, excl. VAT; with <code>grid = &lt;company&gt;</code> the Danish tariffs and taxes are added</td>
+</tr>
+<tr>
+<td><code>stromligning</code></td>
+<td>Strømligning</td>
+<td>Denmark, all-in price per grid area</td>
+<td>DKK</td>
+<td></td>
+<td>spot + grid tariff + Energinet + electricity tax, excl. VAT (set vat = 25), 15 min; non-commercial use only, 15 requests/15 min</td>
+</tr>
+<tr>
+<td><code>energy-charts</code></td>
+<td>Energy-Charts (Fraunhofer ISE)</td>
+<td>Europe: 40 bidding zones</td>
+<td>EUR</td>
+<td></td>
+<td>day-ahead spot, 15 min (CH hourly), excl. VAT; some zones private use only</td>
+</tr>
+<tr>
+<td><code>nordpool</code></td>
+<td>Nord Pool</td>
+<td>Nordics, Baltics, DE-LU, AT, BE, FR, NL, PL, BG, RO, UK</td>
+<td>EUR/DKK/NOK/SEK/PLN/GBP</td>
+<td></td>
+<td>day-ahead spot, 15 min (UK hourly, GBP), excl. VAT</td>
+</tr>
+<tr>
+<td><code>entsoe</code></td>
+<td>ENTSO-E Transparency Platform</td>
+<td>Europe: all bidding zones</td>
+<td>EUR</td>
+<td>yes</td>
+<td>day-ahead spot, excl. VAT; free token: register at transparency.entsoe.eu and ask for REST API access</td>
+</tr>
+<tr>
+<td><code>elering</code></td>
+<td>Elering</td>
+<td>Estonia, Latvia, Lithuania, Finland</td>
+<td>EUR</td>
+<td></td>
+<td>Nord Pool day-ahead, 15 min, excl. VAT</td>
+</tr>
+<tr>
+<td><code>spot-hinta</code></td>
+<td>spot-hinta.fi</td>
+<td>Finland, Baltics, Norway, Sweden, Denmark</td>
+<td>EUR</td>
+<td></td>
+<td>day-ahead spot, 15 min, excl. VAT; one request per minute</td>
+</tr>
+<tr>
+<td><code>elprisetjustnu</code></td>
+<td>Elpriset just nu</td>
+<td>Sweden</td>
+<td>SEK/EUR</td>
+<td></td>
+<td>day-ahead spot, 15 min, excl. VAT and taxes</td>
+</tr>
+<tr>
+<td><code>hvakosterstrommen</code></td>
+<td>Hva koster strømmen</td>
+<td>Norway</td>
+<td>NOK/EUR</td>
+<td></td>
+<td>day-ahead spot, hourly averages, excl. VAT and grid tariff</td>
+</tr>
+<tr>
+<td><code>porssisahko</code></td>
+<td>Pörssisähkö.net</td>
+<td>Finland</td>
+<td>EUR</td>
+<td></td>
+<td>day-ahead spot incl. 25.5 % VAT, 15 min</td>
+</tr>
+<tr>
+<td><code>awattar</code></td>
+<td>aWATTar</td>
+<td>Germany, Austria</td>
+<td>EUR</td>
+<td></td>
+<td>EPEX day-ahead spot, hourly, excl. VAT</td>
+</tr>
+<tr>
+<td><code>tibber</code></td>
+<td>Tibber</td>
+<td>Germany, Netherlands, Norway, Sweden (Tibber customers)</td>
+<td>EUR/NOK/SEK</td>
+<td>yes</td>
+<td>your Tibber price incl. VAT and taxes, 15 min; token from developer.tibber.com; area = home number (1, 2, …)</td>
+</tr>
+<tr>
+<td><code>smartenergy</code></td>
+<td>smartENERGY</td>
+<td>Austria</td>
+<td>EUR</td>
+<td></td>
+<td>EPEX AT spot incl. 20 % VAT, hourly values in 15-min slots</td>
+</tr>
+<tr>
+<td><code>energyzero</code></td>
+<td>EnergyZero</td>
+<td>Netherlands</td>
+<td>EUR</td>
+<td></td>
+<td>NL: spot excl. VAT; NL-all-in: incl. energy tax, purchasing cost and 21 % VAT; 15 min</td>
+</tr>
+<tr>
+<td><code>easyenergy</code></td>
+<td>easyEnergy</td>
+<td>Netherlands</td>
+<td>EUR</td>
+<td></td>
+<td>NL: spot excl. VAT; NL-all-in: incl. energy tax, purchasing cost and VAT; 15 min</td>
+</tr>
+<tr>
+<td><code>frank-energie</code></td>
+<td>Frank Energie</td>
+<td>Netherlands, Belgium</td>
+<td>EUR</td>
+<td></td>
+<td>NL/BE: spot excl. VAT; NL-all-in: incl. markup, energy tax and VAT; 15 min</td>
+</tr>
+<tr>
+<td><code>groupe-e</code></td>
+<td>Groupe E Vario</td>
+<td>Switzerland (Groupe E grid)</td>
+<td>CHF</td>
+<td></td>
+<td>dynamic tariff excl. VAT (vario: energy + grid; vario-grid: grid only), 15 min</td>
+</tr>
+<tr>
+<td><code>ekz</code></td>
+<td>EKZ Energie Dynamisch</td>
+<td>Switzerland (EKZ grid)</td>
+<td>CHF</td>
+<td></td>
+<td>dynamic tariff excl. VAT (integrated: energy + grid 400D + fees; energy: energy only), 15 min</td>
+</tr>
+<tr>
+<td><code>pse</code></td>
+<td>PSE</td>
+<td>Poland</td>
+<td>PLN</td>
+<td></td>
+<td>SDAC day-ahead (CSDAC), 15 min, excl. VAT</td>
+</tr>
+<tr>
+<td><code>ote</code></td>
+<td>OTE</td>
+<td>Czechia</td>
+<td>EUR</td>
+<td></td>
+<td>day-ahead spot, 15 min, excl. VAT</td>
+</tr>
+<tr>
+<td><code>okte</code></td>
+<td>OKTE</td>
+<td>Slovakia</td>
+<td>EUR</td>
+<td></td>
+<td>day-ahead spot, 15 min, excl. VAT</td>
+</tr>
+<tr>
+<td><code>ree</code></td>
+<td>Red Eléctrica (REData)</td>
+<td>Spain</td>
+<td>EUR</td>
+<td></td>
+<td>ES: day-ahead spot, 15 min; ES-PVPC: regulated PVPC 2.0TD (incl. tolls and charges, excl. VAT and tax), hourly</td>
+</tr>
+<tr>
+<td><code>octopus-agile</code></td>
+<td>Octopus Energy Agile</td>
+<td>Great Britain (regions A–P)</td>
+<td>GBP</td>
+<td></td>
+<td>Agile unit rate incl. VAT, 30 min; area = region letter (C = London, A = East England, …)</td>
+</tr>
+<tr>
+<td><code>comed</code></td>
+<td>ComEd Hourly Pricing</td>
+<td>USA: Illinois (ComEd)</td>
+<td>USD</td>
+<td></td>
+<td>PJM real-time price for the ComEd zone, 5 min, supply part only; real time (no prices ahead)</td>
+</tr>
+<tr>
+<td><code>nyiso</code></td>
+<td>NYISO</td>
+<td>USA: New York (11 zones)</td>
+<td>USD</td>
+<td></td>
+<td>day-ahead zonal LBMP, hourly, wholesale</td>
+</tr>
+<tr>
+<td><code>miso</code></td>
+<td>MISO</td>
+<td>USA: Midwest and South (hubs, or any MISO node)</td>
+<td>USD</td>
+<td></td>
+<td>day-ahead LMP (ex-post), hourly, wholesale</td>
+</tr>
+<tr>
+<td><code>caiso</code></td>
+<td>CAISO OASIS</td>
+<td>USA: California (hubs, DLAPs, or any CAISO node)</td>
+<td>USD</td>
+<td></td>
+<td>day-ahead LMP, hourly, wholesale</td>
+</tr>
+<tr>
+<td><code>pjm</code></td>
+<td>PJM Data Miner 2</td>
+<td>USA: PJM (13 states + DC); area = pnode id</td>
+<td>USD</td>
+<td>yes</td>
+<td>day-ahead LMP, hourly; free key from apiportal.pjm.com; area = pnode id (51288 Western Hub, 33092371 ComEd zone)</td>
+</tr>
+<tr>
+<td><code>gridstatus</code></td>
+<td>GridStatus.io</td>
+<td>USA (ERCOT, PJM, CAISO, SPP, MISO, NYISO, ISO-NE) and Canada; area = <code>&lt;dataset&gt;/&lt;location&gt;</code></td>
+<td>USD</td>
+<td>yes</td>
+<td>any GridStatus price dataset (e.g. ercot_spp_day_ahead_hourly/HB_NORTH); key from gridstatus.io</td>
+</tr>
+<tr>
+<td><code>ieso</code></td>
+<td>IESO</td>
+<td>Canada: Ontario</td>
+<td>CAD</td>
+<td></td>
+<td>day-ahead Ontario zonal price, hourly, wholesale</td>
+</tr>
+<tr>
+<td><code>aeso</code></td>
+<td>AESO</td>
+<td>Canada: Alberta</td>
+<td>CAD</td>
+<td></td>
+<td>pool price, hourly, wholesale; real time (no prices ahead)</td>
+</tr>
+<tr>
+<td><code>aemo</code></td>
+<td>AEMO NEM</td>
+<td>Australia: NSW, QLD, VIC, SA, TAS</td>
+<td>AUD</td>
+<td></td>
+<td>wholesale regional price, 5 min actual + 30 min pre-dispatch forecast, excl. GST</td>
+</tr>
+<tr>
+<td><code>amber</code></td>
+<td>Amber Electric</td>
+<td>Australia (Amber customers)</td>
+<td>AUD</td>
+<td>yes</td>
+<td>your Amber price incl. GST (general channel); token from app.amber.com.au/developers; area = site id (default: the first site)</td>
+</tr>
+<tr>
+<td><code>em6</code></td>
+<td>em6</td>
+<td>New Zealand (6 reference nodes)</td>
+<td>NZD</td>
+<td></td>
+<td>wholesale nodal price, 30 min, last 24 h (real time, no prices ahead)</td>
+</tr>
+<tr>
+<td><code>jepx</code></td>
+<td>JEPX</td>
+<td>Japan (system price and 9 areas)</td>
+<td>JPY</td>
+<td></td>
+<td>day-ahead spot, 30 min, wholesale</td>
+</tr>
+<tr>
+<td><code>iex</code></td>
+<td>IEX India</td>
+<td>India</td>
+<td>INR</td>
+<td></td>
+<td>day-ahead market clearing price, 15 min, wholesale</td>
+</tr>
+<tr>
+<td><code>cenace</code></td>
+<td>CENACE</td>
+<td>Mexico (SIN nodes)</td>
+<td>MXN</td>
+<td></td>
+<td>day-ahead nodal price (PML), hourly; area = node code</td>
+</tr>
+<tr>
+<td><code>oree</code></td>
+<td>OREE</td>
+<td>Ukraine (IPS)</td>
+<td>UAH</td>
+<td></td>
+<td>day-ahead market price, hourly, wholesale</td>
+</tr>
+</tbody>
+</table>
+<p>Prices marked spot or wholesale exclude VAT, grid fees and taxes: add them
+with <code>markup</code>, <code>tariffs</code> and <code>vat</code> if <code>max_price</code> is meant as the price you
+pay. Some sources ask for attribution when their prices are shown publicly
+or are for non-commercial use (Strømligning, some Energy-Charts zones, Nord
+Pool's terms); for scheduling your own miner that is fine.</p>
+<h2 id="the-menu">The menu</h2>
+<p>In a terminal (also inside tmux or screen) the miner shows an interactive
+menu. It is a tree beside the screens: Tab (or Esc from a screen) moves
+the keys to it, ↑↓ choose, Enter opens, Esc or Tab goes back to the
+screen; on terminals under 100 columns it takes the whole width while it
+has the keys. The line above the keys shows where you are (for example
+"Mining › PearlHash pools") and messages; the bottom line shows the keys
+of the screen.</p>
+<table>
+<thead>
+<tr>
+<th>menu</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dashboard</td>
+<td>per-GPU hashrate, shares, power / limit / ceiling, efficiency, clocks, temperature, fan, locks and state; the CPU (with its power as root); a hashrate graph per algorithm; the log</td>
+</tr>
+<tr>
+<td>Mining</td>
+<td>GPUs (power limit, ceiling, clock locks: applied at once and saved; Enter lists the clocks the driver takes), PearlHash pools and RandomX pools (ordered lists with failover), PearlHash settings, RandomX settings, Kernel (advanced)</td>
+</tr>
+<tr>
+<td>Tuning</td>
+<td>Auto-tune (and scans, with the kept runs and their results), Power sweep, Sweep results (table and graphs; Enter sets a power limit), CPU clock sweep (Enter uses a clock)</td>
+</tr>
+<tr>
+<td>Automation</td>
+<td>Profiles &amp; schedule, Electricity price (chart and settings), Auto-pause triggers</td>
+</tr>
+<tr>
+<td>System</td>
+<td>Web interface &amp; API, Statistics, Output &amp; logging (log level, status lines), Log (scrollable), Help</td>
+</tr>
+<tr>
+<td>Restart, Quit</td>
+<td>restart with the saved settings; quit (restores clocks and power limits)</td>
+</tr>
+</tbody>
+</table>
+<p>Every settings screen comes from the same list of settings the web
+interface, the API and <code>cavaminer config</code> use: Enter edits — on a setting
+with a list of values (price source, area, grid company, clocks, …) it
+opens the list with what each value means: type to filter, ↑↓ and Enter
+choose, "other value…" where the list may be incomplete — ←→ steps through
+the list, Del (or Backspace) goes back to the default, <code>[</code> <code>]</code> switch between the base
+settings and the profiles (a profile stores only what differs, and a
+profile that is not running takes its settings when it runs). Settings
+marked "restart" apply after Restart.</p>
+<table>
+<thead>
+<tr>
+<th>screen</th>
+<th>keys</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>everywhere</td>
+<td>Tab menu, <code>P</code> pause / resume all mining (kept until resumed), <code>?</code> or F1 help, <code>q</code> quit, Ctrl-L redraw; shortcuts <code>d</code> dashboard, <code>s</code> GPU settings, <code>p</code> profiles, <code>a</code> auto-pause, <code>w</code> sweep, <code>v</code> sweep results, <code>u</code> auto-tune, <code>e</code> electricity, <code>l</code> log</td>
+</tr>
+<tr>
+<td>GPUs</td>
+<td>↑↓ select, ←→ or <code>[</code> <code>]</code> profile, Enter edit (clocks: the list of values the driver takes)</td>
+</tr>
+<tr>
+<td>settings groups</td>
+<td>↑↓ select, Enter edit or list, ←→ next value, Del or Backspace default, <code>[</code> <code>]</code> profile</td>
+</tr>
+<tr>
+<td>pools</td>
+<td>↑↓←→ cell, Enter edit, <code>+</code> add, Space on/off, Shift+↑↓ (or <code>K</code>/<code>J</code>) move, <code>x</code> delete</td>
+</tr>
+<tr>
+<td>profiles &amp; schedule</td>
+<td>↑↓ select, Enter run the profile now, <code>e</code> edit its settings, <code>n</code> new profile, <code>+</code> schedule entry, <code>x</code> delete</td>
+</tr>
+<tr>
+<td>auto-pause</td>
+<td>↑↓ select, <code>+</code> add, <code>e</code> edit, <code>t</code> on/off, <code>x</code> delete</td>
+</tr>
+<tr>
+<td>auto-tune</td>
+<td>↑↓ field, ←→ choose, Enter edit or start, ↓ past Start into the results (<code>[</code> <code>]</code> older/newer run, <code>o</code> sort, <code>g</code> bars, Enter apply), <code>c</code> cancel</td>
+</tr>
+<tr>
+<td>power sweep</td>
+<td>↑↓ field, ←→ GPU, Enter edit or start, <code>c</code> cancel</td>
+</tr>
+<tr>
+<td>sweep results</td>
+<td>←→ GPU, ↑↓ or a row number row, Enter set that power limit, <code>k</code> knee</td>
+</tr>
+<tr>
+<td>CPU clock sweep</td>
+<td>↑↓ field or row, Enter edit, start or use that clock, <code>c</code> cancel</td>
+</tr>
+<tr>
+<td>log</td>
+<td>↑↓ PgUp PgDn scroll, End follow</td>
+</tr>
+<tr>
+<td>RandomX CPUs (picture)</td>
+<td>arrows move, Space core, <code>l</code> L3 cache, <code>s</code> socket (custom / optimal / all / off), <code>a</code> automatic, <code>n</code> threads in all, <code>p</code> per socket, <code>t</code> type the list, <code>c</code> none, Enter save, Esc cancel</td>
+</tr>
+</tbody>
+</table>
+<p>Text fields edit like a shell line (←→, Home/End, Ctrl-←→ by word,
+Ctrl-U/K/W; Enter keeps, Esc drops the change). <code>NO_COLOR</code> makes the menu
+monochrome.</p>
+<h2 id="the-web-interface">The web interface</h2>
+<p>The miner serves a web interface, the REST API, <code>/summary</code> (HiveOS) and
+<code>/metrics</code> (Prometheus) on the <code>miner.api</code> address (<code>--api</code>; default
+<code>127.0.0.1:4078</code>, this machine only; <code>0.0.0.0:4078</code> for the network; <code>0</code>
+turns it off). <code>web.tls = true</code> serves HTTPS with a self-signed certificate
+made once (<code>cavaminer.web.crt</code> / <code>.key</code> next to the settings), or with
+<code>web.cert</code> / <code>web.key</code> of your own. Dark and light themes; works on a
+phone.</p>
+<table>
+<thead>
+<tr>
+<th>page</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dashboards</td>
+<td>your own: tabs, each a grid of widgets — a value with a sparkline, charts of any metrics over 1 hour to 1 year (with event markers), the GPU table, the CPU (hashrate, power, efficiency), the electricity price, controls (pause, resume, profile, restart), events, the log. "Edit dashboard" adds, moves, resizes and removes widgets and dashboards</td>
+</tr>
+<tr>
+<td>Miners</td>
+<td>controls, PearlHash and RandomX state, the GPU and CPU tables with their tuning, the electricity decision, version and uptime</td>
+</tr>
+<tr>
+<td>Statistics</td>
+<td>any metrics over any range as a chart, the events in it, CSV export</td>
+</tr>
+<tr>
+<td>Electricity</td>
+<td>the price now, the decision, the chart of today and tomorrow, the provider's notes and all the price settings</td>
+</tr>
+<tr>
+<td>Settings</td>
+<td>every setting, per profile, with its help; GPU settings applied at once (clocks from the driver's list, power limits with their range); "Choose CPUs…" for RandomX</td>
+</tr>
+<tr>
+<td>Pools</td>
+<td>the pool lists of each algorithm and profile: order, on/off, logins, TLS fingerprints</td>
+</tr>
+<tr>
+<td>Automation</td>
+<td>profiles (run, delete, create), the schedule (with the next time of each entry), the auto-pause triggers</td>
+</tr>
+<tr>
+<td>Tuning</td>
+<td>auto-tune and scans with every run kept, bars and tables of the results, any measured setting applied; power sweeps with charts and "Set limit"; the CPU clock sweep with its chart and "Use"</td>
+</tr>
+<tr>
+<td>Log</td>
+<td>the log, filtered, following</td>
+</tr>
+<tr>
+<td>Account</td>
+<td>your login, password and two-factor setup; users and API tokens (admin)</td>
+</tr>
+<tr>
+<td>Documentation</td>
+<td>this document</td>
+</tr>
+<tr>
+<td>API</td>
+<td>every endpoint described, each can be tried</td>
+</tr>
+</tbody>
+</table>
+<h3 id="access-from-other-machines">Access from other machines</h3>
+<p>Until a user exists, only this machine (the loopback address) can use the
+web interface and the API, without a login, and only under its own
+address in the browser (<code>127.0.0.1</code>, <code>localhost</code> or the machine's name;
+so a web site you visit cannot reach the miner by pointing its own name
+at your machine); API tokens work from anywhere. Create a user to use it
+from elsewhere, with two-factor login if you like:</p>
+<pre><code class="language-sh">sudo ./cavaminer user add cavauser --totp    # asks for the password, shows a QR code for the authenticator app
+sudo ./cavaminer token add home-assistant    # an API token for scripts and Home Assistant (shown once)
+./cavaminer config set miner.api 0.0.0.0:4078
+./cavaminer config set web.tls true          # HTTPS (a self-signed certificate is made; or web.cert / web.key)
+</code></pre>
+<p>Users are <code>admin</code> (everything) or <code>viewer</code> (read only, no secrets).
+Passwords are stored as PBKDF2 hashes, tokens as SHA-256 hashes, both in
+<code>cavaminer.auth.json</code> (readable by its owner only); logins last
+<code>web.session_hours</code> (a week) and survive restarts; five failed logins
+block the client for 15 minutes. Users and tokens can also be managed in
+the web interface (Account) and the API.</p>
+<p>Users and tokens work from anywhere by default. Each can be limited to
+this machine (<code>--local-only</code> on <code>user add</code> / <code>token add</code>, later <code>cavaminer
+user access &lt;name&gt; local|any</code>, <code>cavaminer token access &lt;name&gt; local|any</code>,
+or the Account page), and <code>web.remote_users</code> / <code>web.remote_tokens</code> set to
+false limit all users / all tokens to it. The rules are checked on every
+request, so a change also ends open sessions from elsewhere. "This
+machine" is the loopback address (127.0.0.1, ::1): behind a reverse proxy
+on the same machine every request looks local, so leave these to the
+proxy there. <code>/summary</code> is for this machine only unless
+<code>web.public_summary</code> is on.</p>
+<h2 id="rest-api">REST API</h2>
+<p><code>/api/v1</code>, JSON; <code>Authorization: Bearer &lt;token&gt;</code> (or the web session;
+requests from a browser session that change something need the header
+<code>X-CavaMiner: 1</code>). The API page of the web interface describes every
+endpoint (parameters, bodies, responses, examples) and can try each; the
+same description as OpenAPI 3 is at <code>/openapi.json</code> (for Swagger, Postman
+or code generators). In short:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>status</td>
+<td><code>GET /status</code></td>
+</tr>
+<tr>
+<td>settings</td>
+<td><code>GET /settings[?profile=…]</code> (the schema and values of every setting), <code>PUT /settings</code> (<code>{"key": "value", …}</code>, an empty value = default; the lists <code>pools.pearl</code>, <code>pools.randomx</code>, <code>schedule</code> and <code>autopause</code> take a JSON list); <code>PUT /gpus/&lt;gpu&gt;/settings</code> (<code>power_limit</code>, <code>power_max</code>, <code>mem_clock</code>, <code>gpu_clock</code>, applied at once; <code>&lt;gpu&gt;</code> here and <code>gpu</code> in request bodies: a GPU number, UUID or PCI address)</td>
+</tr>
+<tr>
+<td>pools</td>
+<td><code>GET /pools</code>, <code>PUT /pools/pearl</code> and <code>/pools/randomx</code></td>
+</tr>
+<tr>
+<td>profiles</td>
+<td><code>GET /profiles</code>, <code>POST /profiles</code>, <code>DELETE /profiles/&lt;name&gt;</code>, <code>POST /profiles/&lt;name&gt;/run</code>, <code>PUT /schedule</code></td>
+</tr>
+<tr>
+<td>auto-pause</td>
+<td><code>GET/PUT /autopause</code></td>
+</tr>
+<tr>
+<td>control</td>
+<td><code>POST /pause</code> (<code>{"what": "all|gpus|cpu"}</code>), <code>POST /resume</code>, <code>POST /restart</code>, <code>POST /stop</code></td>
+</tr>
+<tr>
+<td>tuning</td>
+<td><code>GET/POST/DELETE /tune</code> (auto-tunes and scans, the kept runs), <code>GET /tune/&lt;gpu&gt;/runs/&lt;time&gt;</code>, <code>POST /tune/apply</code>; <code>GET/POST/DELETE /sweep</code>; <code>GET/POST/DELETE /cpu/sweep</code>; <code>GET /cpu</code>, <code>GET /cpu/plan</code></td>
+</tr>
+<tr>
+<td>electricity</td>
+<td><code>GET /electricity</code>, <code>GET /electricity/providers</code></td>
+</tr>
+<tr>
+<td>statistics</td>
+<td><code>GET /history?metrics=a,b&amp;from=&amp;to=&amp;points=</code>, <code>GET /metrics</code> (the recorded metrics), <code>GET /events</code>, <code>GET /log?lines=</code>, <code>GET/PUT /dashboards</code></td>
+</tr>
+<tr>
+<td>accounts</td>
+<td><code>POST /auth/login</code>, <code>POST /auth/logout</code>, <code>GET /auth/me</code>, <code>POST /auth/password</code>, <code>POST|PUT|DELETE /auth/totp</code>, <code>GET/POST /users</code>, <code>PUT/DELETE /users/&lt;name&gt;</code>, <code>GET/POST /tokens</code>, <code>PUT/DELETE /tokens/&lt;name&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>Outside the API: <code>GET /summary</code> is the plain JSON snapshot HiveOS reads
+(hashrate, shares, per-GPU hashrate, power, temperature, fan, clocks, the
+CPU), and <code>GET /metrics</code> the Prometheus text format.</p>
+<h2 id="prometheus">Prometheus</h2>
+<p><code>GET /metrics</code> (with a token, or from this machine) exports gauges and
+counters named <code>cavaminer_…</code>: <code>hashrate{algo}</code>, <code>gpu_hashrate</code>,
+<code>gpu_power_watts</code>, <code>gpu_power_limit_watts</code>, <code>gpu_temperature_celsius</code>,
+<code>gpu_fan_percent</code>, <code>gpu_clock_mhz</code>, <code>gpu_paused</code> (all with <code>gpu</code> and
+<code>name</code> labels), <code>shares_total{algo,result}</code>, <code>electricity_price{unit}</code>,
+<code>electricity_mining</code>, <code>electricity_gpu_cost_per_hour</code>,
+<code>electricity_cost_per_hashrate</code>, <code>devfee_active{algo}</code>,
+<code>devfee_shares_total{algo,result}</code> and <code>uptime_seconds</code>.</p>
+<h2 id="home-assistant">Home Assistant</h2>
+<p>The package's <code>integrations/homeassistant/custom_components/cavaminer</code> is
+a Home Assistant integration: copy that folder into Home Assistant's
+<code>config/custom_components/</code>, restart Home Assistant, add "CavaMiner"
+(Settings → Devices &amp; services) with the miner's address and an API token
+(<code>cavaminer token add home-assistant</code>; the miner's <code>miner.api</code> must be
+reachable from Home Assistant). It makes sensors of everything the status
+has (hashrates, shares, every GPU's power, temperature, fan, clocks,
+efficiency and state, the CPU and its power, the electricity price and
+decision, the profile, the dev fee), a mining switch (pause/resume), a
+profile select, restart and auto-tune buttons, each GPU's power limit and
+clock locks as numbers, and an entity for every setting of the miner
+(switch, number, select or text by type; the kernel ones disabled by
+default). The lists (pools, schedule, auto-pause triggers) are sensors
+with the entries as an attribute. Any setting can be changed with the
+service <code>cavaminer.set_setting</code> (key, value — a list for the lists —,
+optional profile); also <code>cavaminer.pause</code>, <code>resume</code>, <code>restart</code>,
+<code>run_profile</code>. Its own README has the details.</p>
+<h2 id="command-line-config-and-ctl">Command line: config and ctl</h2>
+<p>Every setting can be read and set from the command line, and the running
+miner controlled through its API:</p>
+<pre><code class="language-sh">./cavaminer config list [--all] [--profile night]   # the settings (and their defaults)
+./cavaminer config set electricity.max_price 1.5     # saved; a running miner reads it within seconds
+./cavaminer config set randomx.threads 24 --profile night
+./cavaminer config set gpu.0.power_limit 400         # GPU 0 (a GPU number, UUID or PCI address)
+./cavaminer config unset electricity.max_price
+./cavaminer config set schedule '[{&quot;cron&quot;: &quot;0 22 * * *&quot;, &quot;profile&quot;: &quot;night&quot;}]'   # lists as JSON
+./cavaminer config get pools.pearl                   # (pools.randomx, schedule, autopause)
+./cavaminer --set electricity.max_price=1.2 …        # for this run only
+./cavaminer ctl status | pause [all|gpus|cpu] | resume | restart | stop | tune [--gpu N]
+./cavaminer ctl set gpu.0.power_limit 380            # through the running miner's API (applied at once)
+</code></pre>
+<p><code>ctl</code> talks to the running miner's API (its address from the settings);
+with users set up it needs a token (<code>--token</code> or <code>CAVA_TOKEN</code>). The keys
+are those of <code>config list --all</code> (also the command-line names, e.g.
+<code>rx_threads</code>).</p>
+<h2 id="statistics">Statistics</h2>
+<p>Every 10 seconds (<code>stats.interval</code>) the miner records each GPU's hashrate,
+power, power limit and ceiling, temperature, fan, clocks, efficiency and
+tuning (offset, clock locks and cap), shares, RandomX (and, as root, the
+CPU's package power from its RAPL counters), the electricity price, limit
+and decision, what the GPUs' electricity costs (<code>electricity.gpu_cost</code>,
+per hour, and <code>pearl.cost_per_hashrate</code>, per TH/s per day: the cost side
+of mining's "hashprice"), and pauses — plus events (starts, restarts,
+pauses, profile changes, price decisions, tuning results, settings
+changes) — in <code>cavaminer.stats.db</code> (SQLite). Older samples become
+averages (<code>stats.downsample</code>, default <code>1d:1m, 14d:15m, 180d:1h, 2y:1d</code>:
+after a day 1-minute averages, after two weeks 15-minute ones, …, min and
+max kept), samples older than <code>stats.retention</code> go (default <code>unlimited</code>;
+e.g. <code>90d</code>, <code>6m</code>, <code>2y</code>), and the file stays under <code>stats.max_size</code>
+(default <code>1GB</code>; the oldest samples go first and the space is freed). The
+web interface's charts, the Statistics page (with CSV export), the API's
+<code>/history</code> and Home Assistant read them; <code>stats.enabled = false</code> turns the
+recording off.</p>
+<h2 id="dev-fee">Dev fee</h2>
+<p>CavaMiner mines a share of the time for its development: 1 % of the
+PearlHash and 1 % of the RandomX mining time (one minute per 100 minutes
+of mining each). It pays for, among other
+things, hardware to support and tune for more GPUs and CPUs. The first
+window comes at a random point of the first 100 minutes; paused time
+(electricity price, auto-pause, by you) does not count. Your pool
+connection stays open meanwhile and mining returns to your pool's latest
+job right after.</p>
+<p>While it runs, the log says <code>dev fee: mining for CavaMiner's development</code>,
+the menu shows <code>DEV FEE PearlHash 1 %</code> (or RandomX 1 %), the web interface
+a "dev fee" badge, and <code>/api/v1/status</code> (<code>devfee</code>), Prometheus
+(<code>cavaminer_devfee_active</code>) and Home Assistant (a "Dev fee" sensor) report
+it; its shares are counted apart from yours. The dev-fee connections go
+over TLS, with the certificate pinned, to <code>prl.devfee.cavalius.net</code> and
+<code>xmr.devfee.cavalius.net</code> (port 443). If they cannot be reached, or send
+no job within 10 seconds, the miner keeps mining for you and tries again
+100 minutes of mining later; RandomX skips the dev fee when its pool works
+on another seed than yours (a coin other than Monero), so the dataset is
+never rebuilt for it. A dry run (<code>--dry-run</code>) has no dev fee.</p>
+<h2 id="reference">Reference</h2>
+<h3 id="command-line-options">Command-line options</h3>
+<p><code>cavaminer [options] [command]</code>. Without a command the miner mines;
+options also take the form <code>--option=value</code>.</p>
+<p>Mining and pools:</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-o, --url &lt;url&gt;</code></td>
+<td></td>
+<td>PearlHash pool, <code>host:port</code> or <code>stratum+ssl://host:port</code> (repeat for failover; replaces the list of the settings file; also <code>PEARL_POOL</code>)</td>
+</tr>
+<tr>
+<td><code>-u, --user</code></td>
+<td></td>
+<td>PearlHash login: <code>wallet</code> or <code>wallet.worker</code> (for pools without a login of their own; <code>PEARL_USER</code>)</td>
+</tr>
+<tr>
+<td><code>-w, --worker</code></td>
+<td></td>
+<td>worker name, for pools without one of their own (overrides the <code>.worker</code> part of <code>--user</code>; <code>PEARL_WORKER</code>)</td>
+</tr>
+<tr>
+<td><code>-p, --password</code></td>
+<td><code>x</code></td>
+<td>PearlHash pool password, for pools without one of their own (sent with the login when it is not <code>x</code>)</td>
+</tr>
+<tr>
+<td><code>-d, --devices</code></td>
+<td><code>all</code></td>
+<td>GPU numbers, e.g. <code>0,1</code> (the order of <code>nvidia-smi</code> and <code>cavaminer devices</code>), or <code>none</code></td>
+</tr>
+<tr>
+<td><code>--proof</code></td>
+<td><code>zst</code></td>
+<td>share encoding: <code>zst</code> (about 3 KB) or <code>plain</code> (about 136 KB)</td>
+</tr>
+<tr>
+<td><code>--job-timeout</code></td>
+<td><code>180</code></td>
+<td>reconnect when the pool sends no job for this many seconds (at least 30)</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td></td>
+<td>mine and verify shares without submitting them (no dev fee)</td>
+</tr>
+<tr>
+<td><code>--rx-url &lt;url&gt;</code></td>
+<td></td>
+<td>RandomX pool, <code>host:port</code> (repeat for failover; replaces the list; <code>CAVA_RX_POOL</code>)</td>
+</tr>
+<tr>
+<td><code>--rx-user</code></td>
+<td></td>
+<td>RandomX login (for pools without one): the wallet address; for p2pool any name, <code>name+N</code> fixes the share difficulty (<code>CAVA_RX_USER</code>)</td>
+</tr>
+<tr>
+<td><code>--rx-pass</code></td>
+<td><code>x</code></td>
+<td>RandomX pool password, for pools without one of their own (usually the worker name)</td>
+</tr>
+<tr>
+<td><code>--rx-enabled</code></td>
+<td><code>true</code></td>
+<td>RandomX on or off (a profile can switch it off and keep the pools)</td>
+</tr>
+</tbody>
+</table>
+<p>GPU settings (one value for all GPUs or a comma-separated list, one per GPU in <code>-d</code> order; need root):</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--power-limit</code></td>
+<td></td>
+<td>power limit in W, set before mining starts</td>
+</tr>
+<tr>
+<td><code>--power-max</code></td>
+<td></td>
+<td>hard power ceiling in W (sweeps, tuning and the menu stay below); default <code>--power-limit</code>, else the limit at start</td>
+</tr>
+<tr>
+<td><code>--mem-clock</code></td>
+<td></td>
+<td>lock the memory clock (MHz) while mining</td>
+</tr>
+<tr>
+<td><code>--gpu-clock</code></td>
+<td></td>
+<td>lock the GPU clock (MHz) while mining</td>
+</tr>
+<tr>
+<td><code>--gpu-clock-max</code></td>
+<td></td>
+<td>highest GPU clock (MHz), the clock can still drop</td>
+</tr>
+<tr>
+<td><code>--gpu-offset</code></td>
+<td></td>
+<td>clock offset of the voltage/frequency curve (MHz, undervolting)</td>
+</tr>
+</tbody>
+</table>
+<p>Tuning:</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--autotune</code></td>
+<td></td>
+<td>find the most efficient memory clock and GPU clock lock while mining, then keep mining with them (safe range)</td>
+</tr>
+<tr>
+<td><code>--tune-window</code></td>
+<td><code>20</code></td>
+<td>auto-tune: seconds per setting</td>
+</tr>
+<tr>
+<td><code>--tune-min-hashrate</code></td>
+<td><code>0</code></td>
+<td>auto-tune: never choose a setting below this % of the best hashrate (0 = pure efficiency)</td>
+</tr>
+<tr>
+<td><code>--tune-file</code></td>
+<td><code>cavaminer-tune.json</code></td>
+<td>where the auto-tune and scan runs are kept (the latest 20 per GPU)</td>
+</tr>
+<tr>
+<td><code>--sweep</code></td>
+<td></td>
+<td>sweep the power limit while mining and save the curve</td>
+</tr>
+<tr>
+<td><code>--sweep-min</code>, <code>--sweep-max</code></td>
+<td>the GPU's range</td>
+<td>sweep limits in W (at most the ceiling)</td>
+</tr>
+<tr>
+<td><code>--sweep-step</code></td>
+<td><code>5</code></td>
+<td>W between sweep points</td>
+</tr>
+<tr>
+<td><code>--sweep-window</code></td>
+<td><code>16</code></td>
+<td>seconds per sweep point (plus half as long to settle)</td>
+</tr>
+<tr>
+<td><code>--sweep-file</code></td>
+<td><code>cavaminer-sweeps.json</code></td>
+<td>where sweep results are kept (the latest per GPU)</td>
+</tr>
+<tr>
+<td><code>--autotune-offset</code></td>
+<td></td>
+<td>find each GPU's highest stable clock offset at its power limit (undervolting)</td>
+</tr>
+<tr>
+<td><code>--offset-step</code></td>
+<td><code>50</code></td>
+<td>offset search: MHz between offsets</td>
+</tr>
+<tr>
+<td><code>--offset-max</code></td>
+<td><code>1000</code></td>
+<td>offset search: the highest offset tried</td>
+</tr>
+<tr>
+<td><code>--offset-margin</code></td>
+<td><code>50</code></td>
+<td>offset search: the saved offset stays this far below the highest offset without errors</td>
+</tr>
+<tr>
+<td><code>--self-check</code></td>
+<td><code>1024</code> with an offset, else off</td>
+<td>every this many attempts one is computed twice and compared; 0 = off</td>
+</tr>
+</tbody>
+</table>
+<p>RandomX:</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--rx-threads</code></td>
+<td><code>0</code></td>
+<td>hashing threads; 0 = from the caches (see RandomX on the CPU)</td>
+</tr>
+<tr>
+<td><code>--rx-threads-per-socket</code></td>
+<td><code>0</code></td>
+<td>that many threads on every socket instead; 0 = off</td>
+</tr>
+<tr>
+<td><code>--rx-affinity</code></td>
+<td><code>auto</code></td>
+<td>CPUs for the threads, e.g. <code>0-15,64-79</code> (with <code>--rx-threads 0</code>: one thread per listed CPU)</td>
+</tr>
+<tr>
+<td><code>--rx-nice</code></td>
+<td><code>19</code></td>
+<td>priority of the hashing threads (0 normal … 19 lowest)</td>
+</tr>
+<tr>
+<td><code>--rx-huge-pages</code></td>
+<td><code>true</code></td>
+<td>2 MiB pages for the dataset, cache and scratchpads (reserved as root)</td>
+</tr>
+<tr>
+<td><code>--rx-1gb-pages</code></td>
+<td><code>false</code></td>
+<td>the dataset on three 1 GiB pages (reserved as root)</td>
+</tr>
+<tr>
+<td><code>--rx-msr</code></td>
+<td><code>true</code></td>
+<td>the MSR tweak (AMD Zen 2 to 5, Intel; as root, restored on exit)</td>
+</tr>
+<tr>
+<td><code>--rx-max-freq</code></td>
+<td><code>0</code></td>
+<td>maximum CPU clock in MHz for all CPUs while RandomX mines; 0 = off (as root, restored on exit and while paused)</td>
+</tr>
+</tbody>
+</table>
+<p>Settings, output and process:</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code></td>
+<td><code>cavaminer.toml</code></td>
+<td>the settings file (everything else is kept next to it)</td>
+</tr>
+<tr>
+<td><code>--profile</code></td>
+<td></td>
+<td>run this profile (the schedule and the menu's choice are then ignored; <code>base</code> = none)</td>
+</tr>
+<tr>
+<td><code>--set key=value</code></td>
+<td></td>
+<td>a setting for this run only (any key of <code>config list --all</code>; repeatable)</td>
+</tr>
+<tr>
+<td><code>--api</code></td>
+<td><code>127.0.0.1:4078</code></td>
+<td>address of the web interface, API, <code>/summary</code> and <code>/metrics</code>; <code>0</code> = off</td>
+</tr>
+<tr>
+<td><code>--status-interval</code></td>
+<td><code>30</code></td>
+<td>seconds between status lines (without the menu; at least 5)</td>
+</tr>
+<tr>
+<td><code>--log</code></td>
+<td><code>info</code></td>
+<td>log level (<code>info</code>, <code>debug</code>, <code>warn</code>, or filters such as <code>cavaminer=debug</code>)</td>
+</tr>
+<tr>
+<td><code>--log-file</code></td>
+<td></td>
+<td>also write the log to this file (default with <code>--daemon</code>: <code>cavaminer.log</code> next to the settings file)</td>
+</tr>
+<tr>
+<td><code>--no-tui</code></td>
+<td></td>
+<td>log lines instead of the menu</td>
+</tr>
+<tr>
+<td><code>--plain</code></td>
+<td></td>
+<td>plain text: no menu, no colours or other control codes, simple prompts</td>
+</tr>
+<tr>
+<td><code>-q, --quiet</code> (<code>--silent</code>)</td>
+<td></td>
+<td>no output at all (the log still goes to <code>--log-file</code>)</td>
+</tr>
+<tr>
+<td><code>-B, --daemon</code> (<code>--background</code>)</td>
+<td></td>
+<td>run in the background</td>
+</tr>
+<tr>
+<td><code>--pid-file</code></td>
+<td></td>
+<td>write the process id here (default with <code>--daemon</code>: <code>cavaminer.pid</code> next to the settings file)</td>
+</tr>
+</tbody>
+</table>
+<p>PearlHash kernel (advanced; the defaults are the measured best, change them only for experiments):</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--kernel</code></td>
+<td><code>auto</code></td>
+<td>kernel variant: <code>auto</code> = <code>mma52</code> on the RTX 50 series, <code>mma17g</code> on the RTX 30 series, else <code>mma17h</code>; a mixed set of GPUs gets one tile kind (<code>mma51</code>); also <code>mma17</code>, <code>mma17p</code>, <code>mma23</code>, <code>mma23p</code>, <code>mma51</code>, and the signal-0 experiments <code>mma50</code>, <code>mma50s</code></td>
+</tr>
+<tr>
+<td><code>--m</code></td>
+<td><code>0</code></td>
+<td>rows of A per attempt; 0 = automatic (16384; 8192 with the resident RTX 50 kernels)</td>
+</tr>
+<tr>
+<td><code>--n</code></td>
+<td><code>65536</code></td>
+<td>columns of B per job (a wide B amortises the preparation of A)</td>
+</tr>
+<tr>
+<td><code>--k</code></td>
+<td><code>0</code></td>
+<td>common dimension, a multiple of 2048; 0 = automatic (8192 when every GPU builds its operand in the kernel and has an L2 of at least 4 MB, else 4096 on GPUs with a large L2, else 2048)</td>
+</tr>
+<tr>
+<td><code>--signal</code></td>
+<td><code>63</code></td>
+<td>the constant signal value of the matrices, -64 to 64 (63 keeps every GPU operand non-negative, which saves energy; the RTX 50 kernels take 63 or 64 only)</td>
+</tr>
+<tr>
+<td><code>--stages</code></td>
+<td><code>4</code></td>
+<td>pipeline stages of the GEMM</td>
+</tr>
+<tr>
+<td><code>--group</code></td>
+<td><code>0</code></td>
+<td>raster group size; 0 = from the L2 size</td>
+</tr>
+<tr>
+<td><code>--local-diff</code></td>
+<td></td>
+<td>testing: this share difficulty instead of the pool's (with <code>--dry-run</code> only)</td>
+</tr>
+</tbody>
+</table>
+<p>Commands (each takes <code>--config</code>):</p>
+<table>
+<thead>
+<tr>
+<th>command</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>devices</code></td>
+<td>the GPUs, numbered in PCI bus order, with the CUDA and driver versions, the settings each gets and what the next start would change</td>
+</tr>
+<tr>
+<td><code>gpu-procs [seconds]</code></td>
+<td>the programs using each GPU and how much (for auto-pause triggers)</td>
+</tr>
+<tr>
+<td><code>hugepages [--threads N] [--persist]</code></td>
+<td>show and reserve the huge pages RandomX needs (as root); <code>--persist</code> also reserves them at boot</td>
+</tr>
+<tr>
+<td><code>rx-bench [seconds] [--v2]</code></td>
+<td>an offline RandomX benchmark with the RandomX settings (no pool), 60 s by default; <code>--v2</code>: RandomX v2</td>
+</tr>
+<tr>
+<td><code>prices [--list]</code></td>
+<td>the coming electricity prices with the settings applied; <code>--list</code>: the providers and Danish grid companies</td>
+</tr>
+<tr>
+<td><code>config list [--all] [--profile P]</code>, <code>config get KEY</code>, <code>config set KEY VALUE</code>, <code>config unset KEY</code></td>
+<td>the settings file</td>
+</tr>
+<tr>
+<td><code>ctl status / pause [all|gpus|cpu] / resume / restart / stop / tune [--gpu G] [--min-hashrate %] / set KEY VALUE</code></td>
+<td>the running miner, through its API (<code>--token</code> or <code>CAVA_TOKEN</code> once users exist)</td>
+</tr>
+<tr>
+<td><code>user add NAME [--role admin|viewer] [--totp] [--local-only]</code>, <code>user access NAME local|any</code>, <code>user passwd NAME</code>, <code>user totp NAME [--off]</code>, <code>user del NAME</code>, <code>user list</code></td>
+<td>the web interface's users</td>
+</tr>
+<tr>
+<td><code>token add NAME [--role …] [--local-only]</code>, <code>token access NAME local|any</code>, <code>token del NAME</code>, <code>token list</code></td>
+<td>API tokens</td>
+</tr>
+<tr>
+<td><code>stop [--pid-file F]</code></td>
+<td>stop the miner running in the background</td>
+</tr>
+</tbody>
+</table>
+<h3 id="settings-file">Settings file</h3>
+<p><code>cavaminer.toml</code> (<code>--config</code>), TOML. The keys as <code>cavaminer config list
+--all</code>, the menu and the web interface name them (<code>section.key</code> is
+<code>[section]</code> / <code>key = …</code> in the file), with their defaults; "profile" means
+a profile can override it; "restart" that a change applies after a
+restart (everything else applies at once).</p>
+<table>
+<thead>
+<tr>
+<th>key</th>
+<th>default</th>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>miner.devices</code></td>
+<td><code>all</code></td>
+<td>profile, restart</td>
+<td>GPUs: <code>all</code>, a list such as <code>0,1</code>, or <code>none</code></td>
+</tr>
+<tr>
+<td><code>pool.proof</code></td>
+<td><code>zst</code></td>
+<td>profile, restart</td>
+<td>share encoding <code>zst</code> or <code>plain</code></td>
+</tr>
+<tr>
+<td><code>miner.dry_run</code></td>
+<td><code>false</code></td>
+<td>profile, restart</td>
+<td>mine and check shares without sending them</td>
+</tr>
+<tr>
+<td><code>miner.job_timeout</code></td>
+<td><code>180</code></td>
+<td>profile, restart</td>
+<td>seconds without a new job before reconnecting</td>
+</tr>
+<tr>
+<td><code>miner.follow_gpus</code></td>
+<td><code>true</code></td>
+<td>restart</td>
+<td>a card moved to another slot keeps its settings</td>
+</tr>
+<tr>
+<td><code>randomx.enabled</code></td>
+<td><code>true</code></td>
+<td>profile, restart</td>
+<td>RandomX on or off</td>
+</tr>
+<tr>
+<td><code>randomx.threads</code></td>
+<td><code>auto</code></td>
+<td>profile, restart</td>
+<td>hashing threads: <code>auto</code> or a number</td>
+</tr>
+<tr>
+<td><code>randomx.threads_per_socket</code></td>
+<td><code>off</code></td>
+<td>profile, restart</td>
+<td>threads on every socket instead</td>
+</tr>
+<tr>
+<td><code>randomx.affinity</code></td>
+<td><code>auto</code></td>
+<td>profile, restart</td>
+<td>the CPUs, e.g. <code>0-15,32-47</code></td>
+</tr>
+<tr>
+<td><code>randomx.nice</code></td>
+<td><code>19</code></td>
+<td>profile, restart</td>
+<td>thread priority, 0 normal … 19 lowest</td>
+</tr>
+<tr>
+<td><code>randomx.huge_pages</code></td>
+<td><code>true</code></td>
+<td>profile, restart</td>
+<td>2 MiB pages</td>
+</tr>
+<tr>
+<td><code>randomx.pages_1gb</code></td>
+<td><code>false</code></td>
+<td>profile, restart</td>
+<td>the dataset on 1 GiB pages</td>
+</tr>
+<tr>
+<td><code>randomx.msr</code></td>
+<td><code>true</code></td>
+<td>profile, restart</td>
+<td>the MSR tweak</td>
+</tr>
+<tr>
+<td><code>randomx.max_freq</code></td>
+<td><code>off</code></td>
+<td>profile</td>
+<td>maximum CPU clock in MHz for all CPUs while RandomX mines</td>
+</tr>
+<tr>
+<td><code>miner.m</code>, <code>miner.n</code>, <code>miner.k</code>, <code>miner.signal</code>, <code>miner.kernel</code>, <code>miner.stages</code>, <code>miner.group</code></td>
+<td>as the options</td>
+<td>profile, restart</td>
+<td>the PearlHash kernel (advanced)</td>
+</tr>
+<tr>
+<td><code>miner.api</code></td>
+<td><code>127.0.0.1:4078</code></td>
+<td>profile, restart</td>
+<td>where the web interface, API, <code>/summary</code> and <code>/metrics</code> listen; <code>0</code> = off</td>
+</tr>
+<tr>
+<td><code>web.tls</code></td>
+<td><code>false</code></td>
+<td>restart</td>
+<td>HTTPS (a self-signed certificate is made unless <code>web.cert</code> and <code>web.key</code> are set)</td>
+</tr>
+<tr>
+<td><code>web.cert</code>, <code>web.key</code></td>
+<td></td>
+<td>restart</td>
+<td>PEM certificate chain and private key</td>
+</tr>
+<tr>
+<td><code>web.session_hours</code></td>
+<td><code>168</code></td>
+<td></td>
+<td>hours a login lasts</td>
+</tr>
+<tr>
+<td><code>web.public_summary</code></td>
+<td><code>false</code></td>
+<td></td>
+<td><code>/summary</code> for every client, not only this machine</td>
+</tr>
+<tr>
+<td><code>web.remote_users</code>, <code>web.remote_tokens</code></td>
+<td><code>true</code></td>
+<td></td>
+<td>users / API tokens may be used from other machines</td>
+</tr>
+<tr>
+<td><code>stats.enabled</code></td>
+<td><code>true</code></td>
+<td>restart</td>
+<td>record statistics</td>
+</tr>
+<tr>
+<td><code>stats.interval</code></td>
+<td><code>10</code></td>
+<td></td>
+<td>seconds between samples</td>
+</tr>
+<tr>
+<td><code>stats.retention</code></td>
+<td><code>unlimited</code></td>
+<td></td>
+<td>e.g. <code>90d</code>, <code>6m</code>, <code>2y</code></td>
+</tr>
+<tr>
+<td><code>stats.max_size</code></td>
+<td><code>1GB</code></td>
+<td></td>
+<td>e.g. <code>500MB</code>, <code>2GB</code>, <code>unlimited</code> (with the unit; at least 1MB)</td>
+</tr>
+<tr>
+<td><code>stats.downsample</code></td>
+<td><code>1d:1m, 14d:15m, 180d:1h, 2y:1d</code></td>
+<td></td>
+<td><code>&lt;age&gt;:&lt;resolution&gt;, …</code></td>
+</tr>
+<tr>
+<td><code>miner.log</code></td>
+<td><code>info</code></td>
+<td>profile, restart</td>
+<td>log level</td>
+</tr>
+<tr>
+<td><code>miner.status_interval</code></td>
+<td><code>30</code></td>
+<td>profile, restart</td>
+<td>seconds between status lines</td>
+</tr>
+<tr>
+<td><code>electricity.enabled</code></td>
+<td><code>true</code></td>
+<td></td>
+<td><code>false</code> keeps the price settings without using them</td>
+</tr>
+<tr>
+<td><code>electricity.provider</code></td>
+<td></td>
+<td></td>
+<td>a provider id (<code>cavaminer prices --list</code>), <code>url</code> or <code>command</code>; empty = off</td>
+</tr>
+<tr>
+<td><code>electricity.area</code></td>
+<td>the provider's first</td>
+<td></td>
+<td>the price area or region, e.g. <code>DK1</code></td>
+</tr>
+<tr>
+<td><code>electricity.currency</code></td>
+<td>the provider's first</td>
+<td></td>
+<td>where the provider has several</td>
+</tr>
+<tr>
+<td><code>electricity.token</code></td>
+<td></td>
+<td></td>
+<td>API token for providers that need one</td>
+</tr>
+<tr>
+<td><code>electricity.url</code></td>
+<td></td>
+<td></td>
+<td>your own source: the URL (<code>provider = "url"</code>)</td>
+</tr>
+<tr>
+<td><code>electricity.command</code></td>
+<td></td>
+<td></td>
+<td>your own source: the command (<code>provider = "command"</code>)</td>
+</tr>
+<tr>
+<td><code>electricity.interval</code></td>
+<td><code>5</code></td>
+<td></td>
+<td>minutes between polls of your own source</td>
+</tr>
+<tr>
+<td><code>electricity.grid</code></td>
+<td></td>
+<td></td>
+<td>Danish grid company</td>
+</tr>
+<tr>
+<td><code>electricity.factor</code></td>
+<td><code>1</code></td>
+<td></td>
+<td>spot price × factor (e.g. a currency conversion)</td>
+</tr>
+<tr>
+<td><code>electricity.markup</code></td>
+<td><code>0</code></td>
+<td></td>
+<td>added per kWh (supplier markup, taxes not covered otherwise)</td>
+</tr>
+<tr>
+<td><code>electricity.tariffs</code></td>
+<td></td>
+<td></td>
+<td>time-of-day additions: <code>&lt;cron time&gt; = &lt;price&gt;; …</code> (a list of <code>{ when, price }</code> tables in the file)</td>
+</tr>
+<tr>
+<td><code>electricity.vat</code></td>
+<td><code>0</code></td>
+<td></td>
+<td>VAT in percent, applied to the sum</td>
+</tr>
+<tr>
+<td><code>electricity.max_price</code></td>
+<td></td>
+<td></td>
+<td>mine while the price per kWh is at most this</td>
+</tr>
+<tr>
+<td><code>electricity.cheapest_hours</code></td>
+<td><code>0</code></td>
+<td></td>
+<td>also mine during this many cheapest hours of each day</td>
+</tr>
+<tr>
+<td><code>electricity.action</code></td>
+<td><code>pause</code></td>
+<td></td>
+<td><code>pause</code>, <code>pause-gpus</code>, <code>pause-cpu</code> or <code>profile:&lt;name&gt;</code></td>
+</tr>
+<tr>
+<td><code>electricity.missing</code></td>
+<td><code>mine</code></td>
+<td></td>
+<td><code>mine</code> or <code>pause</code> while no price is known</td>
+</tr>
+<tr>
+<td><code>electricity.timezone</code></td>
+<td>the market's (your own source: the system's; set it on Windows)</td>
+<td></td>
+<td>for the tariff times and the cheapest hours</td>
+</tr>
+<tr>
+<td><code>pools.pearl</code>, <code>pools.randomx</code></td>
+<td><code>[]</code></td>
+<td>profile, restart</td>
+<td>the pool lists (<code>[[pools]]</code> and <code>[[randomx.pools]]</code> tables in the file; JSON lists on the command line and in the API)</td>
+</tr>
+<tr>
+<td><code>schedule</code></td>
+<td><code>[]</code></td>
+<td></td>
+<td><code>[[schedule]]</code> entries: <code>cron</code>, <code>profile</code></td>
+</tr>
+<tr>
+<td><code>autopause</code></td>
+<td><code>[]</code></td>
+<td></td>
+<td><code>[[autopause]]</code> triggers (see Auto-pause)</td>
+</tr>
+</tbody>
+</table>
+<p>GPU settings are <code>[[gpu]]</code> tables with <code>uuid</code>, <code>name</code>, <code>pci_bus_id</code> and
+<code>power_limit</code>, <code>power_max</code>, <code>mem_clock</code>, <code>gpu_clock</code>, <code>gpu_offset</code>,
+<code>gpu_clock_max</code> (<code>gpu.&lt;GPU&gt;.&lt;field&gt;</code> for <code>--set</code>, <code>config set</code> and <code>ctl
+set</code>; <code>ctl set</code> applies at once, <code>config set</code> after a restart); profiles are <code>[profiles.&lt;name&gt;.miner]</code>, <code>[profiles.&lt;name&gt;.randomx]</code>,
+<code>[profiles.&lt;name&gt;.pool]</code>, <code>[[profiles.&lt;name&gt;.pools]]</code>,
+<code>[[profiles.&lt;name&gt;.randomx.pools]]</code> and <code>[[profiles.&lt;name&gt;.gpu]]</code> sections
+with the same keys. The file also records the profile chosen by hand
+(<code>[manual]</code>) and a pause by you (<code>paused</code>).</p>
+<h3 id="files">Files</h3>
+<p>Next to the settings file (<code>cavaminer.toml</code> → <code>cavaminer.&lt;ext&gt;</code>):</p>
+<table>
+<thead>
+<tr>
+<th>file</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cavaminer.toml</code></td>
+<td>the settings</td>
+</tr>
+<tr>
+<td><code>cavaminer.stats.db</code> (and <code>-wal</code>, <code>-shm</code>)</td>
+<td>the statistics and events (SQLite); also the saved dashboards</td>
+</tr>
+<tr>
+<td><code>cavaminer.auth.json</code></td>
+<td>users and API tokens (hashed); readable by its owner only</td>
+</tr>
+<tr>
+<td><code>cavaminer.prices.json</code></td>
+<td>the cached electricity prices and tariffs</td>
+</tr>
+<tr>
+<td><code>cavaminer.cpusweep.json</code></td>
+<td>the latest CPU clock sweep</td>
+</tr>
+<tr>
+<td><code>cavaminer.web.crt</code>, <code>cavaminer.web.key</code></td>
+<td>the self-signed certificate for HTTPS</td>
+</tr>
+<tr>
+<td><code>cavaminer.log</code>, <code>cavaminer.pid</code></td>
+<td>the log and process id of a <code>--daemon</code> (unless <code>--log-file</code> / <code>--pid-file</code> say otherwise)</td>
+</tr>
+<tr>
+<td><code>cavaminer-offset-trial.json</code>, <code>cavaminer-offsets.json</code></td>
+<td>the offset search's trials and results</td>
+</tr>
+</tbody>
+</table>
+<p>In the directory the miner is started from (or where the option points):
+<code>cavaminer-tune.json</code> (<code>--tune-file</code>) and <code>cavaminer-sweeps.json</code>
+(<code>--sweep-file</code>). <code>cavaminer hugepages --persist</code> writes
+<code>/etc/sysctl.d/60-cavaminer-hugepages.conf</code>. Files written under the
+miner's previous name (<code>pearlminer.toml</code>, <code>pearlminer-sweeps.json</code>,
+<code>pearlminer-tune.json</code>) are renamed on the first start when the default
+names are used.</p>
+<h3 id="environment-variables">Environment variables</h3>
+<table>
+<thead>
+<tr>
+<th>variable</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PEARL_POOL</code>, <code>PEARL_USER</code>, <code>PEARL_WORKER</code></td>
+<td>as <code>-o</code>, <code>-u</code>, <code>-w</code></td>
+</tr>
+<tr>
+<td><code>CAVA_RX_POOL</code>, <code>CAVA_RX_USER</code></td>
+<td>as <code>--rx-url</code>, <code>--rx-user</code></td>
+</tr>
+<tr>
+<td><code>CAVA_TOKEN</code></td>
+<td>the API token for <code>cavaminer ctl</code></td>
+</tr>
+<tr>
+<td><code>NO_COLOR</code></td>
+<td>no colours in the log, a monochrome menu</td>
+</tr>
+<tr>
+<td><code>TZ</code></td>
+<td>the local time zone (the schedule, the electricity price's default)</td>
+</tr>
+<tr>
+<td><code>CAVA_RX_NUMA=0</code></td>
+<td>one RandomX dataset for all NUMA nodes instead of one per node</td>
+</tr>
+</tbody>
+</table>
+<h3 id="signals">Signals</h3>
+<p>SIGINT (Ctrl-C) and SIGTERM stop the miner and restore the GPUs and the
+CPU; SIGHUP restarts a <code>--daemon</code> with the saved settings (also after the
+binary was replaced by a newer one) and stops a miner in the foreground
+(<code>cavaminer ctl restart</code> restarts either). On Windows, Ctrl-C, closing the
+window, logging off and shutting down stop it, with the GPUs restored;
+<code>cavaminer ctl restart</code> restarts it.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"the NVIDIA driver supports CUDA x.y, but this build's kernels need …", "RTX 50 series GPUs need an NVIDIA driver of at least 575"</td>
+<td>the driver is too old: 525 or newer (580 for the CUDA 13 kernels), RTX 50 series 575 or newer</td>
+</tr>
+<tr>
+<td>"nothing to mine"</td>
+<td>no pool is set: run the first-start questions in a terminal, or give <code>-o</code> / <code>--rx-url</code></td>
+</tr>
+<tr>
+<td>"another miner (pid …) is running"</td>
+<td>a background miner with the same pid file: <code>cavaminer stop</code> first</td>
+</tr>
+<tr>
+<td>the web interface is not reachable from another machine</td>
+<td><code>miner.api</code> is <code>127.0.0.1:4078</code> (this machine only): set <code>0.0.0.0:4078</code> and create a user (<code>cavaminer user add</code>); API tokens work without one</td>
+</tr>
+<tr>
+<td>RandomX is slow, "huge pages" warnings</td>
+<td>the huge pages are not reserved: start as root once, or <code>sudo cavaminer hugepages --persist</code></td>
+</tr>
+<tr>
+<td>RandomX shows fewer threads than cores</td>
+<td>the default is what the caches hold (2 MiB per thread); set <code>randomx.threads</code> to try more</td>
+</tr>
+<tr>
+<td>shares rejected by a pool</td>
+<td>the miner switches to uncompressed proofs for pools that need them after the first rejection; a steady stream of rejections means a wrong login or an unsupported pool</td>
+</tr>
+<tr>
+<td>wrong results or a hung GPU after an offset search</td>
+<td>too high an offset: the next search stays below it (<code>cavaminer-offset-trial.json</code>); lower <code>gpu_offset</code> or set it to 0, and reboot if the GPU hangs</td>
+</tr>
+<tr>
+<td>the power limit or clocks changed outside the miner</td>
+<td>an overclocking tool or <code>nvidia-smi</code> runs beside it: let one of them manage the GPU</td>
+</tr>
+<tr>
+<td>clocks are still locked, or a clock offset still set, after a crash</td>
+<td><code>sudo nvidia-smi -rgc</code> and <code>sudo nvidia-smi -rmc</code> reset the locks; the offset is reset when the next run that sets one (<code>gpu_offset</code>, or <code>--gpu-offset 0</code>) exits</td>
+</tr>
+<tr>
+<td>"web interface off: cannot listen on …"</td>
+<td>the address is in use (another miner shutting down is waited for 30 s): change <code>miner.api</code></td>
+</tr>
+<tr>
+<td>the electricity page shows "no prices yet"</td>
+<td>the source answered nothing yet or needs a token or area: <code>cavaminer prices</code> prints the error, <code>cavaminer prices --list</code> the areas</td>
+</tr>
+<tr>
+<td>Windows: power limits and clocks are refused, RandomX runs on normal pages</td>
+<td>the terminal is not elevated (run it as administrator), or the account lacks "Lock pages in memory" (<code>cavaminer hugepages --persist</code>)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="license">License</h2>
+<p>CavaMiner is free to use, on any number of computers, privately or
+commercially, and the unchanged release may be passed on free of charge;
+modifying it and reverse engineering it are not allowed, except that the
+integrations (such as Home Assistant) may be changed and passed on
+(<code>LICENSE</code>). The open-source components it contains keep their own
+licenses (<code>THIRD-PARTY-NOTICES.txt</code>).</p></article>
+</main>
+<footer><div class="wrap">CavaMiner · PearlHash on NVIDIA GPUs, RandomX on CPUs · dev fee 1 % PearlHash, 1 % RandomX · <a href="license.html">license</a> · <a href="https://github.com/cavalius/cavaminer/issues">bug reports and requests</a></div></footer>
+</body>
+</html>

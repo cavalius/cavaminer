@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CavaMiner — releases</title>
+<meta name="description" content="CavaMiner releases and checksums.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="./"><img src="logo.svg" alt="CavaMiner" height="40"></a><nav><a href="./">Home</a><a href="screenshots.html">Screenshots</a><a href="docs.html">Documentation</a><a href="releases.html" class=on>Releases</a></nav></div></header>
+<main class="wrap">
+<h1>Releases</h1><section class="card" id="v0.35.11"><h2>0.35.11 <span class="muted">· 2026-11-08</span></h2><p>First public release (beta).</p>
+<p>CavaMiner mines <strong>PearlHash</strong> (Pearl) on NVIDIA GPUs and <strong>RandomX</strong> (Monero) on CPUs, both from one process, on Linux and Windows.</p>
+<ul>
+<li>Hand-written CUDA kernels for the RTX 30, 40 and 50 series; auto-tuning, undervolting with self-checks, power sweeps.</li>
+<li>Follows the electricity price (38 sources, about 40 countries), mines the cheapest hours, switches profiles on a schedule.</li>
+<li>Pauses while other programs use a GPU and resumes when they are done.</li>
+<li>Web interface with dashboards and statistics, two-factor logins, REST API, Prometheus, Home Assistant, a terminal menu; HiveOS package.</li>
+<li>Dev fee: 1 % of the PearlHash and 1 % of the RandomX mining time.</li>
+</ul>
+<p>Requirements: Linux x86-64 (glibc ≥ 2.17) or Windows 10/11 x64; NVIDIA driver ≥ 525 (RTX 50 series ≥ 575). Documentation: https://cavaminer.cavalius.net</p>
+<p>Verify downloads with <code>SHA256SUMS</code>. Bugs and requests: https://github.com/cavalius/cavaminer/issues</p><table class="assets"><thead><tr><th>File</th><th class="num">Size</th><th>SHA-256</th></tr></thead><tbody><tr><td><a href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-linux-x86_64">cavaminer-0.35.11-linux-x86_64</a><div class="muted">Linux binary — just the program</div></td><td class="num">37.2 MB</td><td><code class="sha">c2e1eb9b267ed68a1039897f5c8888d9eba3a7cb2e19d2cb1c518d36dc9bf97b</code></td></tr><tr><td><a href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-linux-x86_64.tar.gz">cavaminer-0.35.11-linux-x86_64.tar.gz</a><div class="muted">Linux package — binary, README, Home Assistant integration, licenses</div></td><td class="num">10.4 MB</td><td><code class="sha">dbfd89015987753b290b292539ae6c7ae1405615d3901d86068fb7c2d9074b65</code></td></tr><tr><td><a href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11.tar.gz">cavaminer-0.35.11.tar.gz</a><div class="muted">HiveOS custom miner — for HiveOS flight sheets</div></td><td class="num">10.4 MB</td><td><code class="sha">36faf4845c38014f6805f94eb5dba8d964e9839f4e3a61b14a98680bdac67e34</code></td></tr><tr><td><a href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-windows-x86_64.exe">cavaminer-0.35.11-windows-x86_64.exe</a><div class="muted">Windows program — just cavaminer.exe</div></td><td class="num">35.4 MB</td><td><code class="sha">904d076f60d13e3125c39b8930020b368abfe10b459bd2e8f431a18749c82d91</code></td></tr><tr><td><a href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-windows-x86_64.zip">cavaminer-0.35.11-windows-x86_64.zip</a><div class="muted">Windows package — cavaminer.exe, README, Home Assistant integration, licenses</div></td><td class="num">10.1 MB</td><td><code class="sha">808cfdfff04206363500c57700006e743a671b70b7598a39d06cfd5c0ac139a0</code></td></tr><tr><td><a href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/SHA256SUMS">SHA256SUMS</a><div class="muted">SHA-256 checksums</div></td><td class="num">0 kB</td><td></td></tr></tbody></table></section><p class="muted">Check a download: <code>sha256sum -c SHA256SUMS</code>.</p>
+</main>
+<footer><div class="wrap">CavaMiner · PearlHash on NVIDIA GPUs, RandomX on CPUs · dev fee 1 % PearlHash, 1 % RandomX · <a href="license.html">license</a> · <a href="https://github.com/cavalius/cavaminer/issues">bug reports and requests</a></div></footer>
+</body>
+</html>

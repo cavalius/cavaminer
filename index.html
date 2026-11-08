@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CavaMiner — PearlHash and RandomX miner</title>
+<meta name="description" content="CavaMiner: a PearlHash (Pearl) GPU and RandomX (Monero) CPU miner for Linux and Windows.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="./"><img src="logo.svg" alt="CavaMiner" height="40"></a><nav><a href="./" class=on>Home</a><a href="screenshots.html">Screenshots</a><a href="docs.html">Documentation</a><a href="releases.html">Releases</a></nav></div></header>
+<main class="wrap">
+<section class="hero">
+<img src="logo.svg" alt="CavaMiner" width="360">
+<p class="lead">A cryptocurrency miner for <b>PearlHash</b> (Pearl) on NVIDIA GPUs and <b>RandomX</b> (Monero) on CPUs — one process can do both. Linux and Windows.</p>
+</section>
+<section class="card" id="download">
+<h2>Download 0.35.11 <span class="muted">· 2026-11-08 · Linux and Windows, x86-64</span></h2>
+<div class="buttons"><a class="btn primary" href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-linux-x86_64.tar.gz">Linux package<span>10.4 MB</span></a><a class="btn" href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-windows-x86_64.zip">Windows package<span>10.1 MB</span></a><a class="btn" href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-linux-x86_64">Linux binary<span>37.2 MB</span></a><a class="btn" href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11-windows-x86_64.exe">Windows program<span>35.4 MB</span></a><a class="btn" href="https://github.com/cavalius/cavaminer/releases/download/v0.35.11/cavaminer-0.35.11.tar.gz">HiveOS custom miner<span>10.4 MB</span></a></div>
+<p class="muted">Checksums and older versions: <a href="releases.html">releases</a>. Found a bug, or missing something? <a href="https://github.com/cavalius/cavaminer/issues">Report it on GitHub</a>.</p>
+</section>
+<section class="shots-home"><a href="screenshots.html#web-dashboard"><figure><img src="screenshots/web-dashboard.png" alt="The web interface" loading="lazy"><figcaption>The web interface</figcaption></figure></a><a href="screenshots.html#tui-dashboard"><figure><img src="screenshots/tui-dashboard.png" alt="The terminal menu" loading="lazy"><figcaption>The terminal menu</figcaption></figure></a></section>
+<section class="grid">
+<div class="card"><h3>Fast</h3><p>Hand-written CUDA kernels for RTX 30, 40 and 50 series; safe auto-tuning, undervolting with self-checks, power sweeps.</p></div>
+<div class="card"><h3>Mines when power is cheap</h3><p>Follows the electricity price: 38 price sources in about 40 countries, Danish grid tariffs, cheapest hours, profiles on a schedule.</p></div>
+<div class="card"><h3>Out of the way</h3><p>Pauses automatically while other programs use a GPU, frees its memory, and resumes when they are done.</p></div>
+<div class="card"><h3>Yours to watch and control</h3><p>Web interface with your own dashboards and statistics, two-factor logins, REST API, Prometheus, Home Assistant, a terminal menu.</p></div>
+</section>
+<section class="card">
+<h2>Quick start</h2>
+<pre><code>tar xzf cavaminer-*-linux-x86_64.tar.gz &amp;&amp; cd cavaminer-*-linux-x86_64
+./cavaminer devices
+sudo ./cavaminer -o de.pearl.herominers.com:1200 -u &lt;wallet&gt;.&lt;worker&gt;</code></pre>
+<p class="muted">Windows: unpack the zip, open a terminal as administrator in that folder, <code>.\cavaminer.exe</code> instead of <code>sudo ./cavaminer</code>.</p>
+<p>Requirements: Linux x86-64 (glibc ≥ 2.17) or Windows 10/11 x64, an NVIDIA driver ≥ 525 (RTX 50 series ≥ 575) for GPU mining; RandomX runs on any x86-64 CPU. Root (sudo) or an administrator terminal is needed for clock and power control and huge pages. Full instructions: <a href="docs.html">documentation</a>.</p>
+</section>
+<section class="card" id="devfee">
+<h2>Dev fee</h2>
+<p>CavaMiner is free to download. It mines a share of the time for its development: 1 % of the PearlHash and 1 % of the RandomX mining time (one minute per 100 minutes of mining each). That pays for, among other things, hardware to support and tune for more GPUs and CPUs. While it does, the miner says so in its log, menu and web interface, and the shares are counted apart from yours. Paused time (electricity price, auto-pause, by you) is not counted.</p>
+</section>
+</main>
+<footer><div class="wrap">CavaMiner · PearlHash on NVIDIA GPUs, RandomX on CPUs · dev fee 1 % PearlHash, 1 % RandomX · <a href="license.html">license</a> · <a href="https://github.com/cavalius/cavaminer/issues">bug reports and requests</a></div></footer>
+</body>
+</html>
