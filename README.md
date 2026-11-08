@@ -29,7 +29,7 @@ https://github.com/cavalius/cavaminer/issues
 | | |
 |---|---|
 | Linux | x86-64 with glibc 2.17 or newer (any distribution of the last ten years); everything below works |
-| Windows | Windows 10 or 11, x64, one `cavaminer.exe`; PearlHash and RandomX mine as on Linux (see Windows below for what differs: large pages need a right of the account, there is no MSR tweak, no CPU clock cap and no CPU power reading) |
+| Windows | Windows 10 or 11, x64, one `cavaminer.exe`; PearlHash and RandomX mine as on Linux (see Windows below for what differs: the program is not code-signed yet, so Windows 11's Smart App Control blocks it; large pages need a right of the account, there is no MSR tweak, no CPU clock cap and no CPU power reading) |
 | PearlHash | An NVIDIA GPU of the RTX 30, 40 or 50 series and an NVIDIA driver 525 or newer (RTX 50 series: 575 or newer; 580 or newer runs the kernels built with CUDA 13, which are 1.7 % faster on the RTX 50 series). The CUDA toolkit is not needed: the kernels are inside the miner |
 | RandomX | Any x86-64 CPU; AES and AVX2 help. 2 MiB huge pages, about 2.5 GB of memory |
 | Root / administrator | Needed for everything that touches the hardware: power limits, clocks, the clock offset, huge pages, the MSR tweak and the CPU clock cap. Mining itself, the menu, the web interface and the statistics work without it |
@@ -205,6 +205,20 @@ in a terminal opened as administrator for power limits, clocks, the clock
 offset and large pages; without that it mines with the driver's settings.
 What differs from Linux:
 
+- **Not code-signed yet.** The Windows program carries no code signature
+  in this release; a signed one will follow in a future release. Until
+  then:
+  - With **Smart App Control** on (Windows 11; Windows Security → App &
+    browser control → Smart App Control), Windows refuses to start it:
+    "An Application Control policy has blocked this file". There is no
+    exception for a single program: either turn Smart App Control off
+    (on many Windows 11 versions it cannot be turned on again without
+    resetting Windows), or wait for the signed release.
+  - Otherwise SmartScreen may warn when the downloaded program is first
+    started ("Windows protected your PC": More info → Run anyway). To
+    avoid it, unblock the zip before unpacking it (Properties → Unblock,
+    or `Unblock-File` in PowerShell). Check the download against
+    `SHA256SUMS` (`Get-FileHash` in PowerShell) either way.
 - Background mode: `--daemon`, `cavaminer stop` and SIGHUP are Unix.
   To keep the miner running, make a scheduled task that starts it at
   boot as your account, elevated and without a stored password (in an
@@ -1284,6 +1298,7 @@ window, logging off and shutting down stop it, with the GPUs restored;
 | clocks are still locked, or a clock offset still set, after a crash | `sudo nvidia-smi -rgc` and `sudo nvidia-smi -rmc` reset the locks; the offset is reset when the next run that sets one (`gpu_offset`, or `--gpu-offset 0`) exits |
 | "web interface off: cannot listen on …" | the address is in use (another miner shutting down is waited for 30 s): change `miner.api` |
 | the electricity page shows "no prices yet" | the source answered nothing yet or needs a token or area: `cavaminer prices` prints the error, `cavaminer prices --list` the areas |
+| Windows: "An Application Control policy has blocked this file" | Smart App Control blocks the unsigned program (see Windows); a signed release will follow |
 | Windows: power limits and clocks are refused, RandomX runs on normal pages | the terminal is not elevated (run it as administrator), or the account lacks "Lock pages in memory" (`cavaminer hugepages --persist`) |
 
 ## License
