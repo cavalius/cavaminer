@@ -1,7 +1,7 @@
 CavaMiner License
-Version 1.0, 2026-10-14
+Version 1.1, 2026-11-10
 
-Copyright (c) 2026 Dennis Frank Mogensen. All rights reserved.
+Copyright (c) 2026 Cavalius. All rights reserved.
 
 CavaMiner (the "Software") is published in binary form, together with its
 documentation and integrations (together with the Software, the
@@ -42,7 +42,7 @@ conditions below.
 3. Dev fee
 
    The Software mines part of the time for its development, as described
-   in its documentation (in this version: 2 % of the PearlHash mining time
+   in its documentation (in this version: 1 % of the PearlHash mining time
    and 1 % of the RandomX mining time). Using the Software means accepting
    this.
 
