@@ -11,7 +11,7 @@ body:
     attributes:
       label: CavaMiner version
       description: "`cavaminer --version`"
-      placeholder: "0.37.9"
+      placeholder: "0.37.17"
     validations:
       required: true
   - type: dropdown
