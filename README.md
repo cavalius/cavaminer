@@ -190,11 +190,12 @@ download URL as the installation URL, and fill in:
 | Pool URL | `-o <url>` (several, comma-separated, for failover) |
 | Wallet and worker template | `-u <template>`, e.g. `%WAL%.%WORKER_NAME%` (the worker name is the rig's name) |
 | Pass | `-p <password>` (optional) |
-| Extra config arguments | any further options, separated by `;`, e.g. `--rx-url xmr.pool.example:3333;--rx-user <wallet>` (not `--api` or `-p`: the package sets those) |
+| Extra config arguments | any further options, separated by `;`, e.g. `--rx-url xmr.pool.example:3333;--rx-user <wallet>`; an `--api` or `-p` here replaces the package's own |
 
 The miner then runs with log output and reports its hashrate (as kH/s of
 the pool's unit), temperatures, fans and shares to the HiveOS agent through
-`http://127.0.0.1:4078/summary`. Leave the clocks and power limits to
+`http://127.0.0.1:4078/summary` (or the `--api` address of the extra
+arguments). Leave the clocks and power limits to
 HiveOS' overclocking profiles there: the miner's own clock locks would be
 reset when it exits. The package has not yet been tested on a HiveOS rig;
 reports are welcome.
@@ -934,8 +935,12 @@ instead: the miner's reset on exit would undo it.
 A profile is a named set of settings over the base ones; it stores only
 what differs: which GPUs mine (`none` turns GPU mining off), power limits
 and clocks per GPU, the RandomX threads, CPUs, priority and clock cap,
-`randomx.enabled = false`, pools, anything the settings screen lists. In
-the settings file:
+`randomx.enabled = false`, pools, anything the settings screen lists. A
+GPU's clock lock, clock cap or offset left empty in a profile is the base
+settings' one; `none` (or `default`, 0) there is no lock even where the
+base settings have one (the menu and the web interface offer both, "the
+base value" and "none"; profiles a tuning run saves say so for every
+lock). In the settings file:
 
 ```toml
 [profiles.night.randomx]
@@ -943,6 +948,7 @@ threads = 32
 [[profiles.night.gpu]]
 uuid = "GPU-…"
 power_limit = 500.0
+gpu_clock = 0             # no clock lock, whatever the base settings have
 
 [profiles.day.miner]
 devices = "none"          # no GPU mining during the day
@@ -1406,7 +1412,7 @@ GPU settings (one value for all GPUs or a comma-separated list, one per GPU in `
 | `--mem-clock` | | lock the memory clock (MHz) while mining |
 | `--gpu-clock` | | lock the GPU clock (MHz) while mining |
 | `--gpu-clock-max` | | highest GPU clock (MHz), the clock can still drop |
-| `--gpu-offset` | | clock offset of the voltage/frequency curve (MHz, undervolting) |
+| `--gpu-offset` | | clock offset of the voltage/frequency curve (MHz, undervolting); a positive one needs a clock lock or cap (`--gpu-clock`, `--gpu-clock-max`), else it is not applied |
 | `--fan-speed` | | fixed fan speed in percent (the driver's fan control returns on exit and while paused) |
 | `--temp-limit` | | temperature limit in °C: above it the GPU clock is lowered until the GPU cools |
 | `--kernel` | `auto` | the kernel (see Kernels); needs no root |
