@@ -4,6 +4,11 @@ CavaMiner is a cryptocurrency miner for **PearlHash** (Pearl, PRL) on
 NVIDIA GPUs and **RandomX** (Monero, XMR) on CPUs. One process can mine
 both.
 
+**420 TH/s from one RTX 5090 drawing 394 W: 1067 GH/W** — the balanced,
+undervolted setting the miner's own tuning run found for that card,
+measured while mining on a pool (430.8 TH/s at its fastest; the second
+RTX 5090 in the same rig does 400 TH/s at 398 W: every card differs).
+
 - **Fast.** Hand-written CUDA kernels for the RTX 30, 40 and 50 series,
   within a few percent of the fastest closed-source miner; tuning runs
   that measure your hardware for the goal you set (kernels, clocks, power
