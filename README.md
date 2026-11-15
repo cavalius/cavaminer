@@ -5,8 +5,9 @@ NVIDIA GPUs and **RandomX** (Monero, XMR) on CPUs. One process can mine
 both.
 
 - **Fast.** Hand-written CUDA kernels for the RTX 30, 40 and 50 series,
-  within a few percent of the fastest closed-source miner; safe
-  auto-tuning, undervolting with self-checks, power sweeps.
+  within a few percent of the fastest closed-source miner; tuning runs
+  that measure your hardware for the goal you set (kernels, clocks, power
+  limits, undervolting with self-checks) and keep the result.
 - **Mines when power is cheap.** Follows the electricity price from 38
   sources in about 40 countries (Danish grid tariffs included), runs the
   cheapest hours of the day, switches profiles on a cron schedule, and
@@ -21,7 +22,8 @@ both.
 Status: beta. Linux and Windows on x86-64, with NVIDIA GPUs of the RTX 30,
 40 and 50 series (sm_86, sm_89, sm_120) and any x86-64 CPU; tested on the
 pools listed below. Downloads and this documentation:
-https://cavaminer.cavalius.net — bug reports and requests:
+https://cavaminer.cavalius.net (benchmarks:
+https://cavaminer.cavalius.net/benchmarks.html) — bug reports and requests:
 https://github.com/cavalius/cavaminer/issues
 
 ## Requirements and installation
@@ -188,7 +190,7 @@ download URL as the installation URL, and fill in:
 | Pool URL | `-o <url>` (several, comma-separated, for failover) |
 | Wallet and worker template | `-u <template>`, e.g. `%WAL%.%WORKER_NAME%` (the worker name is the rig's name) |
 | Pass | `-p <password>` (optional) |
-| Extra config arguments | any further options, separated by `;`, e.g. `--mem-clock 5001;--power-limit 220` |
+| Extra config arguments | any further options, separated by `;`, e.g. `--rx-url xmr.pool.example:3333;--rx-user <wallet>` (not `--api` or `-p`: the package sets those) |
 
 The miner then runs with log output and reports its hashrate (as kH/s of
 the pool's unit), temperatures, fans and shares to the HiveOS agent through
@@ -239,7 +241,7 @@ Start-ScheduledTask -TaskName cavaminer
   Assignment), and it applies after logging in again. `cavaminer
   hugepages` shows whether the account has it. 1 GiB pages are Linux only.
 - Not available on Windows: the MSR tweak (it needs a kernel driver), the
-  maximum CPU clock and the CPU clock sweep (cpufreq), the CPU's package
+  maximum CPU clock and the CPU's tuning run (cpufreq), the CPU's package
   power (RAPL); Linux hashrates with the MSR tweak are 4–12 % higher.
 - Auto-pause matches programs by their program name (not the command
   line); `cavaminer gpu-procs` shows the names as the miner sees them.
@@ -398,17 +400,80 @@ Each GPU has (per profile):
 | setting | |
 |---|---|
 | power limit | set before mining starts (`--power-limit`); on exit the lower of the original and the requested limit stays, so it is never raised behind your back |
-| ceiling (`power_max`) | a hard limit nothing (sweeps, tuning, the menu) ever goes above; default the power limit given, else the limit the GPU had at start |
+| ceiling (`power_max`) | a hard limit nothing (tuning, the menu) ever goes above; default the power limit given, else the limit the GPU had at start |
 | memory clock | locked while mining (`--mem-clock`); PearlHash needs little memory bandwidth, so a low memory clock gives the cores more of the power budget (see Tuning) |
 | GPU clock | locked while mining (`--gpu-clock`); power and thermal limits still apply |
 | clock offset | the voltage/frequency curve's offset (`--gpu-offset`, undervolting; see Tuning) |
 | clock cap (`gpu_clock_max`) | the highest GPU clock; unlike a lock the clock can still drop. Saved with an offset, so a light load cannot boost the GPU to clocks the offset was never tested at |
+| fan speed (`fan_speed`) | a fixed speed in percent instead of the driver's fan control (`--fan-speed`); see below |
+| temperature limit (`temp_limit`) | the temperature the miner keeps the GPU at or below (`--temp-limit`); see below |
+| kernel, `k`, `m` | which kernel the GPU mines with and its matrix shape (`--kernel`); see Kernels |
 
 On the command line each takes one value for all GPUs or a comma-separated
 list, one per GPU in `-d` order; the menu (Mining → GPUs), the web
 interface (Settings) and the API apply them at once. The menu and the web
-interface offer the clocks the driver supports and the power range it
-allows. All of them need root and are reset when the miner exits.
+interface offer the clocks the driver supports, the power range it allows
+and the kernels the GPU can run. All of them need root (but the kernel)
+and are reset when the miner exits (the power limit ends at the lower of
+its original and requested value).
+
+### Fans and temperature
+
+`--fan-speed 70` (`fan_speed`) fixes the fans at a speed instead of the
+driver's fan control. A cooler GPU leaks less current: at the same clock
+it draws a few watts less, and under a power limit it clocks a little
+higher. Whoever fixes the fans has to watch the temperature; the miner
+gives them back to the driver 6 °C before the GPU's slowdown temperature,
+while mining is paused, and when it exits.
+
+`--temp-limit 70` (`temp_limit`) keeps the GPU at or below a temperature:
+above it the GPU clock gets a ceiling just under the clock it runs at,
+which drops by about 1 % (up to 3 % when the GPU is several degrees over)
+every 15 seconds while the GPU stays too hot (never below half the highest
+clock), and rises again by 1 % every 15 seconds once the GPU is 3 °C under
+the limit, until the clock lock or cap of the settings is back. It works
+at every power limit and with clock locks and offsets. Tuning runs switch
+it off while they measure (they watch the temperature themselves and never
+choose a setting hotter than the limit).
+
+### Kernels
+
+The kernel is the GPU program that does the mining. The miner has several,
+and which one is best depends on the GPU and on where it runs:
+
+| kernel | GPUs | |
+|---|---|---|
+| `mma52` | RTX 50 | builds one operand from its noise inside the kernel: the least power per hash. The default on RTX 50 |
+| `mma51` | RTX 50 | the same with other hash tiles; a little more power |
+| `mma23` | RTX 50 | both operands from memory: the tensor cores busiest (about 3 % more hashrate at the same clock with `k` and `m` 8192) for about 15 % more power. For a GPU that runs at its clock ceiling, not at its power limit |
+| `mma17g` | all | builds one operand from its noise: little memory traffic, so low memory clocks cost nothing. The default on RTX 30 |
+| `mma17h` | all | both operands from memory, with cache policies: needs the memory clock. The default on RTX 40 and other GPUs |
+| `mma17` | all | both operands from memory |
+
+`kernel = "auto"` (the default) picks by GPU model. `k` (the matrices'
+common dimension) and `m` (rows per attempt) are chosen by the kernel for
+the GPU's cache size unless set. Each GPU can have its own kernel and
+shape: `--kernel mma52,mma23` (one per GPU), `gpu.0.kernel`, the menu and
+the web interface (a change starts that GPU again, a few seconds); the
+miner-wide `miner.kernel`, `miner.k` and `miner.m` are the default for
+GPUs without their own.
+
+The defaults were measured on an RTX 3070, an RTX 3090 and an RTX 5090.
+On other GPUs (RTX 40, the smaller RTX 50, workstation cards) let the
+miner measure: a **kernel scan** is a tuning run that tries the kernels
+and matrix shapes worth measuring on that GPU (the default first; on an
+RTX 50: mma52, mma51, mma23 in up to three shapes, mma17g), at the
+settings the GPU has, while it keeps mining, and keeps the one with the
+most hashrate (or the most hashes per joule) for that GPU:
+
+```sh
+sudo ./cavaminer --tune-preset kernels         # at the start, by hashrate (--tune efficiency: by efficiency)
+./cavaminer ctl tune --preset kernels [--device N] [efficiency]
+```
+
+Also in the menu and the web interface (Tuning, the Kernel scan setup).
+Any tuning run can include the kernels (`kernel = search`, or a list of
+the kernels to try); see Tuning.
 
 ### Hashrate
 
@@ -493,7 +558,7 @@ kernel allows, else for all CPUs): a Ryzen 9 5950X then runs at its
 joule. The original limits come back when mining stops, while it is
 paused and after a crash. With profiles and a schedule the cap can depend
 on the time of day or the electricity price; the setting applies at
-once. Tuning → CPU clock sweep measures your CPU (see Tuning);
+once. A tuning run of the CPU measures yours (see Tuning);
 `cavaminer --rx-max-freq 4000 rx-bench` tests one value offline.
 
 ## Tuning
@@ -501,60 +566,259 @@ once. Tuning → CPU clock sweep measures your CPU (see Tuning);
 PearlHash is compute-bound: under a power limit, every watt the memory
 does not use goes to the GPU cores. Locking the memory clock low raises
 the hashrate at the same power — on an RTX 3090 at 250 W, 5001 MHz instead
-of 9501 MHz gives about +20 % — and the GPU clock lock, the power limit
-and the clock offset each move the balance between hashrate and watts.
-The miner measures all of them for you, while it keeps mining.
+of 9501 MHz gives about +20 % — and the GPU clock lock, the power limit,
+the clock offset and the kernel each move the balance between hashrate and
+watts. The miner measures all of them for you, while it keeps mining, in a
+**tuning run**.
 
-### Auto-tune (safe range)
+### A tuning run
 
-`--autotune` finds the most efficient setting (hashes per watt) on its
-own, while mining (about 10 minutes; needs root):
+A run tries settings, measures each while the device mines (the hashrate
+from the work done, the watts from the energy counter), and lets a goal
+choose among what it measured. You say three things:
+
+- **what to try**: on a GPU the kernel, the memory clock, the power limit,
+  the GPU clock lock and the clock offset; on the CPU its maximum clock.
+  Each of them is kept as it is, searched by the tuner, or given the
+  values to try;
+- **the goal** that chooses;
+- **what happens with the choice**: it is applied and saved, saved as
+  profiles, or the run only measures.
 
 ```sh
-sudo ./cavaminer --autotune --power-limit 450 -o ... -u ...
+sudo ./cavaminer --tune                                   # at the start: a run with the tuning settings
+sudo ./cavaminer --tune efficiency --tune-kernel search   # … with a goal, and the kernels too
+./cavaminer ctl tune                                      # in the running miner
+./cavaminer ctl tune hashrate --device 0 --kernel search
+./cavaminer ctl tune --preset sweep --power 300..450/10   # a power sweep; nothing is changed
+./cavaminer ctl tune --preset full --plan                 # what would this run do, and how long?
+./cavaminer ctl tune --cancel
 ```
 
-It measures the driver's default memory clock and every supported memory
-clock from 30 to 90 % of the highest at the natural GPU clock, then GPU
-clock locks stepping down from the natural clock until the efficiency
-falls twice in a row, then the other memory clocks at the best lock, and
-measures the two best settings again. The most efficient setting wins
-(settings within 1 % count as equal; the faster one is chosen) and is
-kept. It stays in the safe range: only clocks the driver lists as
-supported (stock voltage curve, no offsets), the power limit is never
-raised, and it stops if a GPU comes within 5 °C of its slowdown
-temperature. `--tune-min-hashrate 90` never picks a setting below 90 % of
-the best measured hashrate; `--tune-window` is the seconds per setting
-(default 20).
+A run is described by a set of **fields**, and they have the same names
+wherever a run is started:
 
-The menu (Tuning → Auto-tune) and the web interface (Tuning) run it while
-the miner keeps going, and also a **scan**: an auto-tune at each of
-several power limits, from the GPU's ceiling (never above it) down to 60 %
-of it in five levels, unless you choose the range and step (about 8
-minutes per power limit). The best setting of all is applied with its
-power limit and saved in the running profile. Every run is kept (the
-latest 20 per GPU in `cavaminer-tune.json`) with all the settings it
-measured: the results show while a run goes and afterwards (the run whose
-setting is applied, or an older one), as a table and as bars of power,
-hashrate and efficiency, sorted as you like, and any measured setting can
-be applied (power limit, memory clock and GPU lock, saved). In the menu: ↓
-past "Start" into the results, `[` `]` older and newer runs, `o` sort, `g`
-bars, Enter applies the selected setting, `c` cancels a running tune.
+| | |
+|---|---|
+| settings | `tune.<field>` — `[tune]` in the settings file, `cavaminer config set tune.goal efficiency` |
+| at the start | `--tune [GOAL]` starts a run a minute after the start; `--tune-<field> <value>` |
+| running miner | `cavaminer ctl tune [GOAL] --<field> <value>` |
+| API | `POST /api/v1/tune` with `{"<field>": "<value>", …}` |
+| web interface, menu | Tuning: the fields as a form, with what the run would do beside it |
+| Home Assistant | the service `cavaminer.tune` with the fields |
 
-### Power sweeps
+A run takes each field from the first of these that gives it: the request
+itself (the options of `--tune` and `ctl tune`, the API's body), a
+**preset** named in the request, the saved tuning settings, the defaults.
+The saved tuning settings are what the Tuning page and the menu show and
+edit, so `cavaminer ctl tune` alone starts the run you see there, and any
+field can be changed for one run without saving it. (Start on the web page
+saves the form first; the menu saves each change as it is made.)
 
-A sweep measures hashrate and efficiency at every power limit from the
-GPU's lowest to its highest (at most the ceiling) in 5 W steps, 16 s per
-point plus half as long to settle, while mining; afterwards the limit
-returns to its setting. `--sweep` (with `--sweep-min`, `--sweep-max`,
-`--sweep-step`, `--sweep-window`) runs one without the menu; the menu
-(Tuning → Power sweep, results under Sweep results with a table and
-graphs; Enter sets a power limit, `k` jumps to the knee) and the web
-interface (Tuning, with a chart and "Set limit") run it while mining. The
-latest sweep per GPU is kept in `cavaminer-sweeps.json`, so the curves can
-be viewed later without sweeping again. The suggested *knee*: going up in
-power, the last limit where the extra watts still earn at least 35 % of
-the average efficiency.
+| field | default | |
+|---|---|---|
+| `device` | `gpus` | what is tuned: `gpus` (every GPU), `cpu` (RandomX), or GPUs by number, UUID or PCI address (`0,1`; `--gpu` also names it) |
+| `goal` | `balance:90` | what chooses: see the goals below |
+| `kernel` | `keep` | the kernels: `keep`, `search`, or the kernels to try (`mma52,mma23:16384:4096`: kernel, k, m) |
+| `memory` | `search` | the memory clocks: `keep`, `search`, `7001..`, or `default,7001,5001` (MHz) |
+| `power` | `search` | the power limits: `keep`, `search`, `200..450`, or `300,350`, `200..450/25`, `max`, `min` (W) |
+| `clock` | `search` | the GPU clock locks: `keep`, `search`, `1000..`, or `none,1500,1400`, `1200..1800/50` (MHz) |
+| `offset` | `keep` | the clock offset (undervolting): `keep`, `none`, `search`, or the search's end and step `..800/25` (MHz) |
+| `offset_margin` | `50` | the offset kept stays this far below the highest one without errors (MHz) |
+| `cpu_clock` | `search` | on the CPU, its maximum clocks: `search`, `3000..`, `4500,4000`, `3000..5000/250` (MHz), or `keep` |
+| `method` | `staged` | `staged`: each setting in turn, as far as the goal needs; `grid`: every combination of the values |
+| `window` | `30` | seconds each setting is measured |
+| `settle` | `auto` | seconds before each measurement; `auto`: half the window, 8 s at least (10 s on the CPU) |
+| `temp_max` | `auto` | settings hotter than this (°C) are measured but never chosen; `auto`: the GPU's temperature limit |
+| `apply` | `true` | apply and save what the goal chooses; `false`: only measure, the settings from before return |
+| `profiles` | `none` | profiles that get the choice of a goal of their own: `default` (`max` = hashrate, `balanced` = balance, `efficient` = efficiency), `night=power:200,day=hashrate`, or both (`default,night=power:200`; `default,balanced=balance:85` gives one of the three another goal) |
+
+In the settings file the tuning settings are the `[tune]` table (only what
+differs from the defaults needs to be there):
+
+```toml
+[tune]
+goal = "efficiency"
+memory = "7001.."       # a GPU that also drives a desktop
+window = 45
+profiles = "day=hashrate, night=power:300"
+```
+
+What a setting's field can say:
+
+| value | |
+|---|---|
+| `keep` | as it is: nothing is tried, the run measures with what is set |
+| `search` | the tuner's own candidates and its search, as far as the goal needs them |
+| `a..b` | the same search within bounds; either end may be left out (`7001..`, `..450`) |
+| values | exactly these: `300,350,400`, a range with a step (`200..450/25`; `../5` is the whole range in 5 W steps), and the words `default` (the driver's memory clock), `none` (no clock lock, no maximum CPU clock), `max` and `min` (the highest and lowest power limit). A single value is fixed for the run |
+
+A value a GPU does not take (a memory clock it does not list, a power
+limit above its ceiling, a kernel of another architecture) is left out
+for that GPU — the plan and the log say which — so one list can serve a
+rig of different cards; a GPU with no value left is skipped with a
+message.
+
+The goals:
+
+| goal | |
+|---|---|
+| `hashrate` | the most hashrate |
+| `efficiency` | the most hashes per joule |
+| `balance` | the most efficient setting that keeps 90 % of the highest hashrate (`balance:85` for another share) |
+| `power:300` | the most hashrate at or below 300 W drawn |
+| `rate:70` | the least power for at least 70 TH/s (on the CPU: kH/s) |
+| `knee` | going up in power, the last setting whose extra watts still earn 35 % of its average efficiency (`knee:50` for another share): where more power stops paying |
+
+The presets are the runs most people want, each a set of field values
+(`--tune-preset`, `ctl tune --preset`, `"preset"` in the API, the Quick
+setups of the web page, `r` in the menu); fields given with a preset
+still override it:
+
+| preset | fields | |
+|---|---|---|
+| `balance` | goal `balance`; memory, power, clock `search` | the best compromise |
+| `hashrate` | goal `hashrate`; memory, power, clock `search` | the most hashrate, at the highest power limit allowed |
+| `efficiency` | goal `efficiency`; memory, power, clock `search` | the most hashes per joule |
+| `clocks` | goal `efficiency`; memory, clock `search`; power `keep` | memory clock and clock lock at the power limit set (the auto-tune of 0.35) |
+| `kernels` | goal `hashrate`; kernel `search`; the rest `keep` | a kernel scan at the settings in place |
+| `sweep` | power `../5`; the rest `keep`; apply `false` | a power sweep: the curve, nothing is changed |
+| `undervolt` | goal `hashrate`; offset `search`; the rest `keep` | the clock offset search at the power limit set |
+| `full` | goal `balance`; kernel, memory, power, clock `search`; profiles `default` | everything but undervolting, with the three profiles |
+| `cpu` | device `cpu`; cpu_clock `search`; apply `false` | the CPU's maximum clock stepped down: the curve, nothing is changed |
+
+`ctl tune --plan` (the web page and the menu show the same beside the
+form; `"plan": true` in the API) says what a run would do on each device
+— its steps, the measurements at most and the time at most — and starts
+nothing. `ctl tune --status` shows what runs; `ctl tune --cancel` (with
+`--device`: only there) stops runs, and the settings from before return.
+
+### How a run goes
+
+A **staged** run takes each setting it tries in turn, in the order that
+needs the fewest measurements:
+
+1. where the tuner chooses the power limits itself: the lowest limit the
+   GPU holds under load. Some GPUs cannot get down to their lowest limit
+   while they compute (an RTX 3090 at 100 W: the driver drops it to its
+   idle clock, a seventh of the hashrate for a third of the power); that
+   limit is the lower end of everything the run measures;
+2. the kernels (`kernel`), each at the power limits the goal cares about:
+   the highest for `hashrate`, the lowest for `efficiency`, both for
+   `balance`, `rate` and `knee`. Within the noise the miner's own choice
+   stays;
+3. the memory clock (`memory`): `search` tries the driver's default and
+   every clock it lists except the idle one, at the power limit where the
+   goal decides — the highest for `hashrate`, `balance`, `rate`, `knee` and
+   runs with profiles, the given one for `power`, the lowest for
+   `efficiency` — by hashrate where only the hashrate counts, else by
+   efficiency (at one power limit: the same hashrate for less power). `7001..` tries no
+   clock below 7001 MHz, for a GPU that also drives a desktop, which a low
+   memory clock slows down;
+4. the clock offset search (`offset = search`; outside the safe range, see
+   below). Where the hashrate counts it runs at the highest power limit,
+   where the efficiency counts at the lowest (lower clocks take a larger
+   offset); `balance`, `rate`, `knee` and a run with profiles need both. After
+   each search the kernels of step 2 that came within 3 % of the best are
+   measured once more, because a GPU that now sits at its clock cap
+   instead of its power limit may prefer another;
+5. the curve: the power limits (`power`) from the highest down, then GPU
+   clock locks (`clock`) below the clock of the lowest limit. `search`
+   measures about seven limits between the ceiling and the lowest the GPU
+   holds, and locks 5 % apart until the efficiency has fallen twice in a
+   row, both only as far as the goal needs: `hashrate` needs the top
+   alone, `balance` stops where the hashrate falls under its share. Limits
+   and locks given as values are all measured. Down the curve the next
+   lower memory clock gets another try every few points: it starts to pay
+   where the cores need less of the memory's speed. With an offset search
+   the power limits are measured under the offset found at the top, the
+   lowest limit and the clock locks under the one found at the bottom
+   (for `efficiency` only these: its choice is at the low end);
+6. the goal chooses among the curve; the choice is applied, measured once
+   more and saved in the running profile.
+
+A **grid** run (`method = grid`) measures every combination of the values
+of every setting tried — kernels × memory clocks × power limits × clock
+locks, the offset search first — and the goal chooses among all of them.
+It makes no assumptions about your hardware and takes the longest: the
+plan says how many measurements that is.
+
+A run saves what it was asked to try, and what it had to change on the way
+(an offset it lowered, a clock lock it lifted): a kernel scan saves the
+kernel, a run with `power = keep` leaves the power limit setting alone.
+A clock lock in place is lifted for the run when the power limit or the
+clock offset is tried (the limit could not move the clock under it).
+`apply = false` changes nothing on the device and puts the settings from
+before back (profiles named in `profiles` are still saved): the
+run is a sweep, its results are kept (its goal only marks a choice among
+them; a run that applies stops when nothing it measured meets its goal).
+With `profiles` the whole curve is measured whatever the goal, and each
+profile named gets the choice of its own goal — `default` is `max` (the
+highest hashrate), `balanced` (the most efficient with 90 % of it) and
+`efficient` (the most hashes per joule) — for the schedule, the
+electricity price rule (`electricity.action = "profile:efficient"`) or a
+click.
+
+Without an offset search an offset already in place stays as it is. With
+an offset every point runs with self-checks; a point that computes wrong
+results is measured again at a lower offset, and that lower offset is what
+the point is saved with. Points hotter than `temp_max` are measured but
+never chosen, a point that comes within 5 °C of the slowdown temperature
+is cut short. A measurement during which the pool had no job is taken
+again. No run sets a power limit above the ceiling (`power_max`). If a run
+fails or is cancelled, the settings from before return.
+
+An offset too high does not always show as wrong results: a kernel can get
+stuck on the GPU for good (see [the watchdog](#clock-offset-undervolting)),
+and the miner then restarts itself. A run in progress goes on after the
+restart, below the offset that did it: what it had measured and decided is
+kept step by step (`cavaminer.tune.run.json`). The same holds when a GPU
+hung the whole machine or the miner was killed: restart it, start the
+miner, and the run goes on (a killed miner restores nothing: the run first
+removes the clock locks its interrupted part left in the GPU). A run that
+was interrupted like that seven times ends there.
+
+### Results
+
+Every run is kept with all its points (the latest 20 per device,
+`cavaminer.tune.json`), and a kept run can be used again without measuring
+again:
+
+- any point can be applied: all of its settings are set and saved, in the
+  running profile or in another one for when that profile runs;
+- any goal can choose from it: the run that found your `balance` setting
+  also knows your most efficient one, and the one for 300 W;
+- profiles can be saved from it (`default`, names with goals, or both).
+
+The web interface (Tuning) shows each device's runs with the curve as a
+chart, the points as a table (sorted as you like, with their share of the
+largest as bars), the choice of the run and of the three classic goals
+marked, "Show its choice" for any goal, Apply, "Save profiles…" and
+Forget. In the menu: ↓ past the actions into the results, ←→ the devices,
+`[` `]` older and newer runs, `o` sort, `g` graphs, Enter applies the
+point, `s` saves it in a profile, `a` moves to the point a goal chooses,
+`p` saves profiles, Del twice forgets the run. From the command line:
+
+```sh
+./cavaminer ctl results                              # the kept runs of every device
+./cavaminer ctl results 0                            # GPU 0's latest run, point by point
+./cavaminer ctl results 0 --pick power:300           # the same, with what that goal would choose marked
+./cavaminer ctl results 0 --apply efficiency         # what that goal chooses in it, applied and saved
+./cavaminer ctl results 0 --apply 14 --profile night # point 14 into the profile night
+./cavaminer ctl results 0 --run 1794620000 --profiles day=hashrate,night=power:300
+./cavaminer ctl results cpu --apply balance
+./cavaminer ctl results 0 --run 1794620000 --forget
+```
+
+The API has the same: `GET /api/v1/tune` (the fields, presets, every
+device's state and runs), `GET /api/v1/tune/<device>/runs/<time>` (a run
+with its points; `?pick=<goal>` says what a goal would choose),
+`POST /api/v1/tune/apply`, `DELETE /api/v1/tune/<device>/runs/<time>`.
+
+The results of the tools of earlier versions — auto-tune and scan runs
+(`cavaminer-tune.json`), power sweeps (`cavaminer-sweeps.json`), the CPU
+clock sweep — are read into the kept runs the
+first time this version starts; the old files stay where they are.
 
 ### Clock offset (undervolting)
 
@@ -562,24 +826,32 @@ Outside the safe range: a positive offset of the voltage/frequency curve
 runs each clock at a lower voltage, so within a power limit the GPU clocks
 higher (two RTX 5090s at 500 W: +9 %; an RTX 3070 at 195 W: +6 %). Too
 much offset makes the GPU compute wrong results, and at clocks it was
-never tested at it can hang (a reboot is then needed). `--autotune-offset`
-finds the offset per GPU while mining (about 15 minutes; needs root):
+never tested at it can hang (a reboot is then needed). A tuning run with
+`offset = search` finds the offset per GPU while mining (about 15 minutes
+on its own; needs root):
 
 ```sh
-sudo ./cavaminer --autotune-offset
+sudo ./cavaminer --tune-preset undervolt             # at the power limit set
+./cavaminer ctl tune efficiency --offset search      # as a step of a run for a goal
+./cavaminer ctl tune --preset undervolt --offset ..600/25
 ```
 
-With the GPU at its power limit it raises the offset in 50 MHz steps
-(`--offset-step`, up to `--offset-max`, default 1000) with frequent
-self-checks: every eighth attempt is computed twice and all its tile
-hashes compared, so a computing error shows as a mismatch. The first
-offset with a mismatch ends the search; the highest good one less
-`--offset-margin` (50 MHz) is confirmed for two minutes and saved in the
-settings with a clock cap 2 % above the clock it ran at (`gpu_offset`,
-`gpu_clock_max`), so that a light load cannot boost the GPU to untested
-clocks. Offsets being tried are written to `cavaminer-offset-trial.json`
-first: after a hang, the next search stays below that offset; the results
-go to `cavaminer-offsets.json`.
+With the GPU at its power limit the search raises the offset in 50 MHz
+steps up to 1000 MHz (`offset = ..800/25` for another end and step) with
+frequent self-checks: every second attempt is computed twice and all its
+tile hashes compared, so a computing error shows as a mismatch. The first
+offset with a mismatch ends the search (so do three steps in a row that
+change neither the clock nor the power: the voltage is at its floor
+there, and more offset would only be a risk); the highest good one less
+`offset_margin` (50 MHz) is confirmed for a minute and a half and saved in
+the settings with a clock cap (`gpu_offset`, `gpu_clock_max`): the highest
+clock that passed at that offset or a higher one, so that neither a light
+load nor a change that leaves the GPU power to spare (a lower memory
+clock, a higher power limit) can take it to clocks that were not tested.
+Each offset is approached in 10 MHz steps of a second each, so that wrong
+results show where they begin. Offsets being tried are written to
+`cavaminer-offset-trial.json` first: after a hang, the next search stays
+below that offset.
 
 While mining with an offset, one attempt in 1024 is checked
 (`--self-check`); a failed check lowers the offset by one step and saves
@@ -588,24 +860,60 @@ base settings). The miner also re-applies the clock cap or lock within a second
 whenever the clock runs above it (for example after an `nvidia-smi -rgc`
 from outside) and removes the offset if it cannot. Auto-pause gives other
 programs the driver's clocks (no offset, no locks) and restores the tuning
-on resume. Run the offset search where the machine can be restarted.
+on resume. Run an offset search where the machine can be restarted.
 
-### CPU clock sweep (RandomX)
+The watchdog: computing errors can also leave a kernel stuck on the GPU
+(its threads wait for each other forever; `nvidia-smi` shows 100 % load at
+idle power, the driver reports nothing). Nothing but the end of the
+process ends such a kernel, so a GPU that returns no result for 30 seconds
+makes the miner restart itself, with a saved offset lowered by two steps
+first. That works for every reason a kernel may get stuck, with or without
+an offset. A tuning run that was going on then continues after the
+restart, below the offset on trial.
 
-In the menu (Tuning → CPU clock sweep) or the web interface (Tuning) the
-miner measures the RandomX hashrate, the CPU package power and the clock
-while it keeps mining: first with no cap, then with the maximum CPU clock
-stepped down from just below that clock (250 MHz steps by default, down to
-60 % of it, at least 2000 MHz; acpi-cpufreq: its P-states, each with boost
-off), about 35 s per point. All CPUs are capped (they share their voltage,
-see RandomX above); afterwards the cap returns to its setting. The result
-is kept (`cavaminer.cpusweep.json`) with three suggestions: the highest
-hashrate, the best compromise (the most hashes per joule with at least
-90 % of the highest hashrate) and the best efficiency; "Use" (Enter in the
-menu) makes a point's clock the maximum CPU clock of the running profile,
-which applies at once. Where GPUs mine too, look at their hashrate after a
-low cap: feeding them runs on the same CPU. Needs root and the CPU package
-power (RAPL). API: `GET/POST/DELETE /api/v1/cpu/sweep`.
+### The CPU (RandomX)
+
+`device = cpu` tunes the one setting the CPU has, its maximum clock
+(`randomx.max_freq`, see RandomX above):
+
+```sh
+./cavaminer ctl tune --preset cpu                    # the curve; nothing is changed
+./cavaminer ctl tune efficiency --device cpu         # … and the most efficient clock applied
+./cavaminer ctl tune balance --device cpu --cpu-clock 3000..4500/100 --profiles default
+```
+
+While RandomX keeps mining the run measures the hashrate, the CPU package
+power and the hashing cores' clock: first with no maximum (the reference),
+then with the maximum CPU clock at each clock tried — `search` steps down
+from just below the reference's clock in 250 MHz steps to 60 % of it, at
+least 2000 MHz (acpi-cpufreq: its P-states, each with boost off) — about
+45 s per point. All CPUs are capped (they share their voltage); afterwards
+the maximum returns to its setting, unless `apply` makes the goal's choice
+the maximum CPU clock of the running profile, which applies at once.
+`profiles` saves the clock of each profile's own goal (with `default`: no
+maximum for `max`, the most efficient with 90 % of the hashrate for
+`balanced`, the most hashes per joule for `efficient`). The goals are the
+GPUs' (`rate` in kH/s), and so are the kept runs and what can be done with
+them. Where GPUs mine too, look at their hashrate after a low maximum:
+feeding them runs on the same CPU. Needs root, cpufreq and the CPU package
+power (RAPL).
+
+### The tuning options of 0.35
+
+The separate tools of earlier versions are runs now; their command-line
+options (and `POST /api/v1/tune` with the auto-tune's body) still work and
+start the same thing. `cavaminer ctl tune` alone now starts a run with the
+tuning settings:
+
+| 0.35 | now |
+|---|---|
+| `--autotune`, `ctl tune --min-hashrate 90` (the safe auto-tune), with `--tune-min-hashrate 90` | `--tune-preset clocks` (`ctl tune --preset clocks`); the goal `balance:90` |
+| the menu's and web interface's scan (an auto-tune at several power limits) | `ctl tune --preset efficiency` (it chooses the power limits itself), or with limits of your own: `--power 220,255,290,330,365` |
+| `--autotune-offset` with `--offset-step`, `--offset-max`, `--offset-margin` | `--tune-preset undervolt`, `--tune-offset ..1000/50`, `--tune-offset-margin` |
+| `--sweep` with `--sweep-min`, `--sweep-max`, `--sweep-step`, `--sweep-window` | `--tune-preset sweep`, `--tune-power 100..365/5`, `--tune-window` |
+| the CPU clock sweep (menu, web interface) | `ctl tune --preset cpu` |
+| `--tune-file`, `--sweep-file` | the runs are kept in `cavaminer.tune.json` next to the settings file |
+| `GET/POST/DELETE /api/v1/sweep`, `/api/v1/cpu/sweep` (removed) | `/api/v1/tune` |
 
 ### What is reset when the miner stops
 
@@ -841,8 +1149,8 @@ of the screen.
 | menu | |
 |---|---|
 | Dashboard | per-GPU hashrate, shares, power / limit / ceiling, efficiency, clocks, temperature, fan, locks and state; the CPU (with its power as root); a hashrate graph per algorithm; the log |
-| Mining | GPUs (power limit, ceiling, clock locks: applied at once and saved; Enter lists the clocks the driver takes), PearlHash pools and RandomX pools (ordered lists with failover), PearlHash settings, RandomX settings, Kernel (advanced) |
-| Tuning | Auto-tune (and scans, with the kept runs and their results), Power sweep, Sweep results (table and graphs; Enter sets a power limit), CPU clock sweep (Enter uses a clock) |
+| Mining | GPUs (power limit, ceiling, clock locks, cap and offset, fan speed, temperature limit, kernel: applied at once and saved; Enter lists the clocks the driver takes and the kernels the GPU runs), PearlHash pools and RandomX pools (ordered lists with failover), PearlHash settings, RandomX settings, Kernel (advanced) |
+| Tuning | the tuning settings (the fields of a run: what to try, the goal, what to do with the result), beside them what the run they make would do; Start, the presets, the defaults; below, each device's runs with their points (table and graphs; Enter applies a point) |
 | Automation | Profiles & schedule, Electricity price (chart and settings), Auto-pause triggers |
 | System | Web interface & API, Statistics, Output & logging (log level, status lines), Log (scrollable), Help |
 | Restart, Quit | restart with the saved settings; quit (restores clocks and power limits) |
@@ -859,16 +1167,13 @@ marked "restart" apply after Restart.
 
 | screen | keys |
 |---|---|
-| everywhere | Tab menu, `P` pause / resume all mining (kept until resumed), `?` or F1 help, `q` quit, Ctrl-L redraw; shortcuts `d` dashboard, `s` GPU settings, `p` profiles, `a` auto-pause, `w` sweep, `v` sweep results, `u` auto-tune, `e` electricity, `l` log |
-| GPUs | ↑↓ select, ←→ or `[` `]` profile, Enter edit (clocks: the list of values the driver takes) |
+| everywhere | Tab menu, `P` pause / resume all mining (kept until resumed), `?` or F1 help, `q` quit, Ctrl-L redraw; shortcuts `d` dashboard, `s` GPU settings, `p` profiles, `a` auto-pause, `u` tuning, `e` electricity, `l` log (a screen's own keys come first: `a` and `e` on profiles, `e` and `l` on auto-pause and the pools, `s` `a` `p` in the tuning results) |
+| GPUs | ↑↓ select, ←→ or `[` `]` profile, Enter edit (clocks, kernel, k, m: a list of the values the GPU takes) |
 | settings groups | ↑↓ select, Enter edit or list, ←→ next value, Del or Backspace default, `[` `]` profile |
 | pools | ↑↓←→ cell, Enter edit, `+` add, Space on/off, Shift+↑↓ (or `K`/`J`) move, `x` delete |
 | profiles & schedule | ↑↓ select, Enter run the profile now, `e` edit its settings, `n` new profile, `+` schedule entry, `x` delete |
 | auto-pause | ↑↓ select, `+` add, `e` edit, `t` on/off, `x` delete |
-| auto-tune | ↑↓ field, ←→ choose, Enter edit or start, ↓ past Start into the results (`[` `]` older/newer run, `o` sort, `g` bars, Enter apply), `c` cancel |
-| power sweep | ↑↓ field, ←→ GPU, Enter edit or start, `c` cancel |
-| sweep results | ←→ GPU, ↑↓ or a row number row, Enter set that power limit, `k` knee |
-| CPU clock sweep | ↑↓ field or row, Enter edit, start or use that clock, `c` cancel |
+| tuning | ↑↓ setting, Enter edit or list (on an action: start, plan, preset, defaults; a run with an offset search: Enter twice), ←→ next value, Del default, `r` preset, `c` cancel the runs; ↓ past the actions into the results (at the run's choice): ←→ device, `[` `]` older/newer run, `o` sort, `g` graphs, Enter apply that point, `s` save it in a profile, `a` the row a goal chooses (`power:300`), `p` save profiles (`default`, or `night=power:300,…`), Del twice forgets the run, ↑ from the first row or Esc back |
 | log | ↑↓ PgUp PgDn scroll, End follow |
 | RandomX CPUs (picture) | arrows move, Space core, `l` L3 cache, `s` socket (custom / optimal / all / off), `a` automatic, `n` threads in all, `p` per socket, `t` type the list, `c` none, Enter save, Esc cancel |
 
@@ -891,11 +1196,11 @@ phone.
 | Dashboards | your own: tabs, each a grid of widgets — a value with a sparkline, charts of any metrics over 1 hour to 1 year (with event markers), the GPU table, the CPU (hashrate, power, efficiency), the electricity price, controls (pause, resume, profile, restart), events, the log. "Edit dashboard" adds, moves, resizes and removes widgets and dashboards |
 | Miners | controls, PearlHash and RandomX state, the GPU and CPU tables with their tuning, the electricity decision, version and uptime |
 | Statistics | any metrics over any range as a chart, the events in it, CSV export |
-| Electricity | the price now, the decision, the chart of today and tomorrow, the provider's notes and all the price settings |
-| Settings | every setting, per profile, with its help; GPU settings applied at once (clocks from the driver's list, power limits with their range); "Choose CPUs…" for RandomX |
+| Electricity | the price now, the decision, the price chart from yesterday to tomorrow, the provider's notes and all the price settings |
+| Settings | every setting but the tuning settings (they are the Tuning page's form), per profile, with its help; GPU settings applied at once (clocks from the driver's list, power limits with their range, clock offset, fans, temperature limit, kernel); "Choose CPUs…" for RandomX |
 | Pools | the pool lists of each algorithm and profile: order, on/off, logins, TLS fingerprints |
 | Automation | profiles (run, delete, create), the schedule (with the next time of each entry), the auto-pause triggers |
-| Tuning | auto-tune and scans with every run kept, bars and tables of the results, any measured setting applied; power sweeps with charts and "Set limit"; the CPU clock sweep with its chart and "Use" |
+| Tuning | a tuning run as a form (the devices, the goal, what to try on a GPU or the CPU, what to do with the result, how to measure), quick setups for the usual runs, what the run would do and how long before it starts, the same run as a command line; each device's runs with the curve as a chart and the points as a table, any point or any goal's choice applied (to the running profile or another), profiles saved from a run |
 | Log | the log, filtered, following |
 | Account | your login, password and two-factor setup; users and API tokens (admin) |
 | Documentation | this document |
@@ -947,12 +1252,13 @@ or code generators). In short:
 | | |
 |---|---|
 | status | `GET /status` |
-| settings | `GET /settings[?profile=…]` (the schema and values of every setting), `PUT /settings` (`{"key": "value", …}`, an empty value = default; the lists `pools.pearl`, `pools.randomx`, `schedule` and `autopause` take a JSON list); `PUT /gpus/<gpu>/settings` (`power_limit`, `power_max`, `mem_clock`, `gpu_clock`, applied at once; `<gpu>` here and `gpu` in request bodies: a GPU number, UUID or PCI address) |
+| settings | `GET /settings[?profile=…]` (the schema and values of every setting), `PUT /settings` (`{"key": "value", …}`, an empty value = default; the lists `pools.pearl`, `pools.randomx`, `schedule` and `autopause` take a JSON list); `PUT /gpus/<gpu>/settings` (`power_limit`, `power_max`, `mem_clock`, `gpu_clock`, `gpu_clock_max`, `gpu_offset`, `fan_speed`, `temp_limit`, `kernel`, `k`, `m`, applied at once; `<gpu>`: a GPU number, UUID or PCI address) |
 | pools | `GET /pools`, `PUT /pools/pearl` and `/pools/randomx` |
 | profiles | `GET /profiles`, `POST /profiles`, `DELETE /profiles/<name>`, `POST /profiles/<name>/run`, `PUT /schedule` |
 | auto-pause | `GET/PUT /autopause` |
 | control | `POST /pause` (`{"what": "all|gpus|cpu"}`), `POST /resume`, `POST /restart`, `POST /stop` |
-| tuning | `GET/POST/DELETE /tune` (auto-tunes and scans, the kept runs), `GET /tune/<gpu>/runs/<time>`, `POST /tune/apply`; `GET/POST/DELETE /sweep`; `GET/POST/DELETE /cpu/sweep`; `GET /cpu`, `GET /cpu/plan` |
+| tuning | `GET /tune` (the fields, presets, every device's state, limits and runs), `POST /tune` (start a run: `{"preset": "full", "goal": "balance:85", "kernel": "search", "power": "200..450", …}`; an empty body runs the saved tuning settings; `"plan": true` only says what it would do), `DELETE /tune[?device=…]` (cancel), `GET /tune/<device>/runs/<time>[?pick=<goal>]`, `DELETE /tune/<device>/runs/<time>`, `POST /tune/apply` (`{"device": 0, "point": "efficiency"}`: a point's number, `best` or a goal; `profile`, `profiles`); `<device>`: a GPU number, UUID or PCI address, or `cpu` |
+| RandomX CPUs | `GET /cpu` (the CPU's layout), `GET /cpu/plan?threads=&per_socket=&affinity=` (the CPUs the threads would get) |
 | electricity | `GET /electricity`, `GET /electricity/providers` |
 | statistics | `GET /history?metrics=a,b&from=&to=&points=`, `GET /metrics` (the recorded metrics), `GET /events`, `GET /log?lines=`, `GET/PUT /dashboards` |
 | accounts | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/password`, `POST|PUT|DELETE /auth/totp`, `GET/POST /users`, `PUT/DELETE /users/<name>`, `GET/POST /tokens`, `PUT/DELETE /tokens/<name>` |
@@ -963,13 +1269,14 @@ CPU), and `GET /metrics` the Prometheus text format.
 
 ## Prometheus
 
-`GET /metrics` (with a token, or from this machine) exports gauges and
+`GET /metrics` (with an API token or a login; from this machine without
+one only while no user is set up) exports gauges and
 counters named `cavaminer_…`: `hashrate{algo}`, `gpu_hashrate`,
 `gpu_power_watts`, `gpu_power_limit_watts`, `gpu_temperature_celsius`,
 `gpu_fan_percent`, `gpu_clock_mhz`, `gpu_paused` (all with `gpu` and
 `name` labels), `shares_total{algo,result}`, `electricity_price{unit}`,
-`electricity_mining`, `electricity_gpu_cost_per_hour`,
-`electricity_cost_per_hashrate`, `devfee_active{algo}`,
+`electricity_mining`, `electricity_gpu_cost_per_hour{currency}`,
+`electricity_cost_per_hashrate{currency}`, `devfee_active{algo}`,
 `devfee_shares_total{algo,result}` and `uptime_seconds`.
 
 ## Home Assistant
@@ -982,15 +1289,19 @@ a Home Assistant integration: copy that folder into Home Assistant's
 reachable from Home Assistant). It makes sensors of everything the status
 has (hashrates, shares, every GPU's power, temperature, fan, clocks,
 efficiency and state, the CPU and its power, the electricity price and
-decision, the profile, the dev fee), a mining switch (pause/resume), a
-profile select, restart and auto-tune buttons, each GPU's power limit and
-clock locks as numbers, and an entity for every setting of the miner
-(switch, number, select or text by type; the kernel ones disabled by
-default). The lists (pools, schedule, auto-pause triggers) are sensors
+decision, the profile; the dev fee as a binary sensor), a mining switch (pause/resume), a
+profile select, buttons for a restart and for tuning runs (the saved
+tuning settings, the usual presets, cancel), each GPU's power limit,
+ceiling, clock locks, clock cap and offset,
+fan speed and temperature limit as numbers and its kernel as a select, and
+an entity for every setting of the miner (switch, number, select or text by
+type; the kernel and tuning settings disabled by default). The lists (pools, schedule, auto-pause triggers) are sensors
 with the entries as an attribute. Any setting can be changed with the
 service `cavaminer.set_setting` (key, value — a list for the lists —,
 optional profile); also `cavaminer.pause`, `resume`, `restart`,
-`run_profile`. Its own README has the details.
+`run_profile`, `tune` (a tuning run with its fields), `tune_cancel` and
+`tune_apply`. Its own README has the
+details.
 
 ## Command line: config and ctl
 
@@ -1006,8 +1317,12 @@ miner controlled through its API:
 ./cavaminer config set schedule '[{"cron": "0 22 * * *", "profile": "night"}]'   # lists as JSON
 ./cavaminer config get pools.pearl                   # (pools.randomx, schedule, autopause)
 ./cavaminer --set electricity.max_price=1.2 …        # for this run only
-./cavaminer ctl status | pause [all|gpus|cpu] | resume | restart | stop | tune [--gpu N]
+./cavaminer ctl status | pause [all|gpus|cpu] | resume | restart | stop
+./cavaminer ctl tune [GOAL] [--preset NAME] [--device D] [--kernel …] [--power …] [--plan]   # a tuning run; see Tuning
+./cavaminer ctl results [DEVICE] [--pick GOAL] [--apply POINT] [--profiles LIST]   # the kept runs and what to do with them
+./cavaminer config set tune.window 45                # a tuning setting: what a run uses when its request says nothing else
 ./cavaminer ctl set gpu.0.power_limit 380            # through the running miner's API (applied at once)
+./cavaminer ctl set gpu.1.kernel mma23               # GPU 1 starts again with that kernel
 ```
 
 `ctl` talks to the running miner's API (its address from the settings);
@@ -1031,8 +1346,8 @@ after a day 1-minute averages, after two weeks 15-minute ones, …, min and
 max kept), samples older than `stats.retention` go (default `unlimited`;
 e.g. `90d`, `6m`, `2y`), and the file stays under `stats.max_size`
 (default `1GB`; the oldest samples go first and the space is freed). The
-web interface's charts, the Statistics page (with CSV export), the API's
-`/history` and Home Assistant read them; `stats.enabled = false` turns the
+web interface's charts, the Statistics page (with CSV export) and the
+API's `/history` read them; `stats.enabled = false` turns the
 recording off.
 
 ## Dev fee
@@ -1049,7 +1364,7 @@ job right after.
 While it runs, the log says `dev fee: mining for CavaMiner's development`,
 the menu shows `DEV FEE PearlHash 1 %` (or RandomX 1 %), the web interface
 a "dev fee" badge, and `/api/v1/status` (`devfee`), Prometheus
-(`cavaminer_devfee_active`) and Home Assistant (a "Dev fee" sensor) report
+(`cavaminer_devfee_active`) and Home Assistant (a "Dev fee" binary sensor) report
 it; its shares are counted apart from yours. The dev-fee connections go
 over TLS, with the certificate pinned, to `prl.devfee.cavalius.net` and
 `xmr.devfee.cavalius.net` (port 443). If they cannot be reached, or send
@@ -1087,29 +1402,36 @@ GPU settings (one value for all GPUs or a comma-separated list, one per GPU in `
 | option | default | |
 |---|---|---|
 | `--power-limit` | | power limit in W, set before mining starts |
-| `--power-max` | | hard power ceiling in W (sweeps, tuning and the menu stay below); default `--power-limit`, else the limit at start |
+| `--power-max` | | hard power ceiling in W (tuning and the menu stay below); default `--power-limit`, else the limit at start |
 | `--mem-clock` | | lock the memory clock (MHz) while mining |
 | `--gpu-clock` | | lock the GPU clock (MHz) while mining |
 | `--gpu-clock-max` | | highest GPU clock (MHz), the clock can still drop |
 | `--gpu-offset` | | clock offset of the voltage/frequency curve (MHz, undervolting) |
+| `--fan-speed` | | fixed fan speed in percent (the driver's fan control returns on exit and while paused) |
+| `--temp-limit` | | temperature limit in °C: above it the GPU clock is lowered until the GPU cools |
+| `--kernel` | `auto` | the kernel (see Kernels); needs no root |
 
-Tuning:
+Tuning (a tuning run at the start; each `--tune-<field>` is the tuning field of that name, its default the setting `tune.<field>`; see Tuning):
 
 | option | default | |
 |---|---|---|
-| `--autotune` | | find the most efficient memory clock and GPU clock lock while mining, then keep mining with them (safe range) |
-| `--tune-window` | `20` | auto-tune: seconds per setting |
-| `--tune-min-hashrate` | `0` | auto-tune: never choose a setting below this % of the best hashrate (0 = pure efficiency) |
-| `--tune-file` | `cavaminer-tune.json` | where the auto-tune and scan runs are kept (the latest 20 per GPU) |
-| `--sweep` | | sweep the power limit while mining and save the curve |
-| `--sweep-min`, `--sweep-max` | the GPU's range | sweep limits in W (at most the ceiling) |
-| `--sweep-step` | `5` | W between sweep points |
-| `--sweep-window` | `16` | seconds per sweep point (plus half as long to settle) |
-| `--sweep-file` | `cavaminer-sweeps.json` | where sweep results are kept (the latest per GPU) |
-| `--autotune-offset` | | find each GPU's highest stable clock offset at its power limit (undervolting) |
-| `--offset-step` | `50` | offset search: MHz between offsets |
-| `--offset-max` | `1000` | offset search: the highest offset tried |
-| `--offset-margin` | `50` | offset search: the saved offset stays this far below the highest offset without errors |
+| `--tune [goal]` | | start a tuning run a minute after the start, then keep mining with its result; the goal as `--tune-goal` |
+| `--tune-preset <name>` | | a named setup for the fields (and starts the run): `balance`, `hashrate`, `efficiency`, `clocks`, `kernels`, `sweep`, `undervolt`, `full`, `cpu` |
+| `--tune-device` (`--tune-gpu`) | `gpus` | what is tuned: `gpus`, `cpu`, or GPUs by number, UUID or PCI address |
+| `--tune-goal` | `balance:90` | `hashrate`, `efficiency`, `balance[:percent]`, `power:<watts>`, `rate:<TH/s>`, `knee[:percent]` |
+| `--tune-kernel` | `keep` | the kernels: `keep`, `search`, or `mma52,mma23:16384:4096` |
+| `--tune-memory` | `search` | the memory clocks: `keep`, `search`, `7001..`, or `default,7001,5001` |
+| `--tune-power` | `search` | the power limits: `keep`, `search`, `200..450`, or `300,350`, `200..450/25` |
+| `--tune-clock` | `search` | the GPU clock locks: `keep`, `search`, `1000..`, or `none,1500,1400` |
+| `--tune-offset` | `keep` | the clock offset: `keep`, `none`, `search` (undervolting; outside the safe range), `..800/25` |
+| `--tune-offset-margin` | `50` | the offset kept stays this far (MHz) below the highest one without errors |
+| `--tune-cpu-clock` | `search` | on the CPU, its maximum clocks: `search`, `3000..`, `4500,4000`, or `keep` |
+| `--tune-method` | `staged` | `staged` (each setting in turn) or `grid` (every combination) |
+| `--tune-window` | `30` | seconds each setting is measured |
+| `--tune-settle` | `auto` | seconds before each measurement |
+| `--tune-temp-max` | `auto` | settings hotter than this (°C) are never chosen |
+| `--tune-apply` | `true` | apply and save the goal's choice; `false`: only measure |
+| `--tune-profiles` | `none` | `default`, `name=goal,…` or both: profiles that get their own goal's choice |
 | `--self-check` | `1024` with an offset, else off | every this many attempts one is computed twice and compared; 0 = off |
 
 RandomX:
@@ -1146,10 +1468,10 @@ PearlHash kernel (advanced; the defaults are the measured best, change them only
 
 | option | default | |
 |---|---|---|
-| `--kernel` | `auto` | kernel variant: `auto` = `mma52` on the RTX 50 series, `mma17g` on the RTX 30 series, else `mma17h`; a mixed set of GPUs gets one tile kind (`mma51`); also `mma17`, `mma17p`, `mma23`, `mma23p`, `mma51`, and the signal-0 experiments `mma50`, `mma50s` |
+| `--kernel` | `auto` | the kernel, one for all GPUs or one per GPU (`mma52,mma23`): `auto` = `mma52` on the RTX 50 series, `mma17g` on the RTX 30 series, else `mma17h`; also `mma17`, `mma17p`, `mma23`, `mma23h`, `mma23p`, `mma51`, and the signal-0 experiments `mma50`, `mma50s` (see Kernels; every GPU mines with its own kernel's hash tiles) |
 | `--m` | `0` | rows of A per attempt; 0 = automatic (16384; 8192 with the resident RTX 50 kernels) |
 | `--n` | `65536` | columns of B per job (a wide B amortises the preparation of A) |
-| `--k` | `0` | common dimension, a multiple of 2048; 0 = automatic (8192 when every GPU builds its operand in the kernel and has an L2 of at least 4 MB, else 4096 on GPUs with a large L2, else 2048) |
+| `--k` | `0` | common dimension, a multiple of 2048; 0 = automatic per GPU (8192 for a kernel that builds its operand in the kernel on an L2 of at least 4 MB, else 4096 on GPUs with a large L2, else 2048) |
 | `--signal` | `63` | the constant signal value of the matrices, -64 to 64 (63 keeps every GPU operand non-negative, which saves energy; the RTX 50 kernels take 63 or 64 only) |
 | `--stages` | `4` | pipeline stages of the GEMM |
 | `--group` | `0` | raster group size; 0 = from the L2 size |
@@ -1165,7 +1487,7 @@ Commands (each takes `--config`):
 | `rx-bench [seconds] [--v2]` | an offline RandomX benchmark with the RandomX settings (no pool), 60 s by default; `--v2`: RandomX v2 |
 | `prices [--list]` | the coming electricity prices with the settings applied; `--list`: the providers and Danish grid companies |
 | `config list [--all] [--profile P]`, `config get KEY`, `config set KEY VALUE`, `config unset KEY` | the settings file |
-| `ctl status / pause [all|gpus|cpu] / resume / restart / stop / tune [--gpu G] [--min-hashrate %] / set KEY VALUE` | the running miner, through its API (`--token` or `CAVA_TOKEN` once users exist) |
+| `ctl status / pause [all|gpus|cpu] / resume / restart / stop / tune [GOAL] [--preset NAME] [--<field> VALUE]… [--plan] [--status] [--cancel] / results [DEVICE] [--run TIME] [--pick GOAL] [--apply POINT] [--profile NAME] [--profiles LIST] [--forget] / set KEY VALUE` | the running miner, through its API (`--token` or `CAVA_TOKEN` once users exist) |
 | `user add NAME [--role admin|viewer] [--totp] [--local-only]`, `user access NAME local|any`, `user passwd NAME`, `user totp NAME [--off]`, `user del NAME`, `user list` | the web interface's users |
 | `token add NAME [--role …] [--local-only]`, `token access NAME local|any`, `token del NAME`, `token list` | API tokens |
 | `stop [--pid-file F]` | stop the miner running in the background |
@@ -1195,6 +1517,7 @@ restart (everything else applies at once).
 | `randomx.msr` | `true` | profile, restart | the MSR tweak |
 | `randomx.max_freq` | `off` | profile | maximum CPU clock in MHz for all CPUs while RandomX mines |
 | `miner.m`, `miner.n`, `miner.k`, `miner.signal`, `miner.kernel`, `miner.stages`, `miner.group` | as the options | profile, restart | the PearlHash kernel (advanced) |
+| `tune.device`, `tune.goal`, `tune.kernel`, `tune.memory`, `tune.power`, `tune.clock`, `tune.offset`, `tune.offset_margin`, `tune.cpu_clock`, `tune.method`, `tune.window`, `tune.settle`, `tune.temp_max`, `tune.apply`, `tune.profiles` | as the fields (see Tuning) | | the tuning settings: what a tuning run does when its request says nothing else (`[tune]` in the file) |
 | `miner.api` | `127.0.0.1:4078` | profile, restart | where the web interface, API, `/summary` and `/metrics` listen; `0` = off |
 | `web.tls` | `false` | restart | HTTPS (a self-signed certificate is made unless `web.cert` and `web.key` are set) |
 | `web.cert`, `web.key` | | restart | PEM certificate chain and private key |
@@ -1232,7 +1555,8 @@ restart (everything else applies at once).
 
 GPU settings are `[[gpu]]` tables with `uuid`, `name`, `pci_bus_id` and
 `power_limit`, `power_max`, `mem_clock`, `gpu_clock`, `gpu_offset`,
-`gpu_clock_max` (`gpu.<GPU>.<field>` for `--set`, `config set` and `ctl
+`gpu_clock_max`, `fan_speed`, `temp_limit`, `kernel`, `k`, `m`
+(`gpu.<GPU>.<field>` for `--set`, `config set` and `ctl
 set`; `ctl set` applies at once, `config set` after a restart); profiles are `[profiles.<name>.miner]`, `[profiles.<name>.randomx]`,
 `[profiles.<name>.pool]`, `[[profiles.<name>.pools]]`,
 `[[profiles.<name>.randomx.pools]]` and `[[profiles.<name>.gpu]]` sections
@@ -1249,18 +1573,19 @@ Next to the settings file (`cavaminer.toml` → `cavaminer.<ext>`):
 | `cavaminer.stats.db` (and `-wal`, `-shm`) | the statistics and events (SQLite); also the saved dashboards |
 | `cavaminer.auth.json` | users and API tokens (hashed); readable by its owner only |
 | `cavaminer.prices.json` | the cached electricity prices and tariffs |
-| `cavaminer.cpusweep.json` | the latest CPU clock sweep |
+| `cavaminer.tune.json` | the tuning runs with their points (the latest 20 per device) |
+| `cavaminer.tune.run.json` | a tuning run in progress (it goes on after a restart; removed when the run ends) |
 | `cavaminer.web.crt`, `cavaminer.web.key` | the self-signed certificate for HTTPS |
 | `cavaminer.log`, `cavaminer.pid` | the log and process id of a `--daemon` (unless `--log-file` / `--pid-file` say otherwise) |
-| `cavaminer-offset-trial.json`, `cavaminer-offsets.json` | the offset search's trials and results |
+| `cavaminer-offset-trial.json` | the offsets an offset search is trying (after a hang the next search stays below them) |
 
-In the directory the miner is started from (or where the option points):
-`cavaminer-tune.json` (`--tune-file`) and `cavaminer-sweeps.json`
-(`--sweep-file`). `cavaminer hugepages --persist` writes
-`/etc/sysctl.d/60-cavaminer-hugepages.conf`. Files written under the
-miner's previous name (`pearlminer.toml`, `pearlminer-sweeps.json`,
-`pearlminer-tune.json`) are renamed on the first start when the default
-names are used.
+`cavaminer hugepages --persist` writes
+`/etc/sysctl.d/60-cavaminer-hugepages.conf`. The result files of earlier
+versions (`cavaminer-tune.json` and `cavaminer-sweeps.json` in the
+directory the miner is started from, `cavaminer.cpusweep.json`) are read into `cavaminer.tune.json` once and
+stay where they are. Files written under the miner's previous name
+(`pearlminer.toml`, `pearlminer-sweeps.json`, `pearlminer-tune.json`) are
+renamed on the first start when the default names are used.
 
 ### Environment variables
 
@@ -1270,7 +1595,7 @@ names are used.
 | `CAVA_RX_POOL`, `CAVA_RX_USER` | as `--rx-url`, `--rx-user` |
 | `CAVA_TOKEN` | the API token for `cavaminer ctl` |
 | `NO_COLOR` | no colours in the log, a monochrome menu |
-| `TZ` | the local time zone (the schedule, the electricity price's default) |
+| `TZ` | the local time zone (the schedule; the electricity price with your own source) |
 | `CAVA_RX_NUMA=0` | one RandomX dataset for all NUMA nodes instead of one per node |
 
 ### Signals
@@ -1293,7 +1618,8 @@ window, logging off and shutting down stop it, with the GPUs restored;
 | RandomX is slow, "huge pages" warnings | the huge pages are not reserved: start as root once, or `sudo cavaminer hugepages --persist` |
 | RandomX shows fewer threads than cores | the default is what the caches hold (2 MiB per thread); set `randomx.threads` to try more |
 | shares rejected by a pool | the miner switches to uncompressed proofs for pools that need them after the first rejection; a steady stream of rejections means a wrong login or an unsupported pool |
-| wrong results or a hung GPU after an offset search | too high an offset: the next search stays below it (`cavaminer-offset-trial.json`); lower `gpu_offset` or set it to 0, and reboot if the GPU hangs |
+| wrong results or a hung GPU after an offset search | too high an offset: lower `gpu_offset` or set it to 0, and reboot if the GPU hangs; after a hang during a search the next search stays below the offset it was trying (`cavaminer-offset-trial.json`) |
+| "no result for 30 s: a kernel is stuck on the GPU … restarting the miner" | computing errors left a kernel stuck (a clock offset too high, or a hardware fault): the miner lowers a saved offset by two steps and restarts itself; if it happens without an offset, look at the GPU's temperature, power and risers |
 | the power limit or clocks changed outside the miner | an overclocking tool or `nvidia-smi` runs beside it: let one of them manage the GPU |
 | clocks are still locked, or a clock offset still set, after a crash | `sudo nvidia-smi -rgc` and `sudo nvidia-smi -rmc` reset the locks; the offset is reset when the next run that sets one (`gpu_offset`, or `--gpu-offset 0`) exits |
 | "web interface off: cannot listen on …" | the address is in use (another miner shutting down is waited for 30 s): change `miner.api` |
