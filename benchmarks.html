@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CavaMiner — benchmarks</title>
+<meta name="description" content="CavaMiner benchmarks: PearlHash hashrates and power of RTX 30 and RTX 50 series GPUs, RandomX on CPUs, and how they were measured.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="./"><img src="logo.svg" alt="CavaMiner" height="40"></a><nav><a href="./">Home</a><a href="screenshots.html">Screenshots</a><a href="benchmarks.html" class=on>Benchmarks</a><a href="docs.html">Documentation</a><a href="releases.html">Releases</a></nav></div></header>
+<main class="wrap">
+<article class="card doc bench"><h1>CavaMiner benchmarks</h1>
+<p>GPUs (PearlHash) measured on 2026-11-13 with CavaMiner 0.36.0 (a development build; its kernels are those of 0.37); CPUs (RandomX) on 2026-10-18.</p>
+<h2>How it was measured</h2>
+<ul>
+<li><strong>GPUs</strong>: a tuning run of the miner while mining on a pool: <code>cavaminer --tune hashrate --tune-kernel search
+  --tune-profiles default</code>, with <code>--tune-offset search</code> for the undervolted rows (measured with the earlier
+  form of that run). It measures the kernels the GPU can
+  run, the memory clocks, power limits from the highest allowed down to the lowest the GPU holds and GPU clock
+  locks below that, each point for 30 s after 15 s to settle. Hashrate as the pool counts it (TH/s = 10¹²
+  multiply-accumulates per second); power is the board power from the driver's energy counter (NVML), fans included.
+  Fans under the driver's control unless a note says otherwise.</li>
+<li><strong>Settings</strong>: <em>Stock</em> is the card as it comes: default power limit and clocks, the miner's default kernel.
+  <em>Max hashrate</em> is the fastest point measured; <em>balanced</em> the most efficient point that keeps at least 90 %
+  of that hashrate; <em>best efficiency</em> the most hashes per joule. The miner saves the three as the profiles
+  <code>max</code>, <code>balanced</code> and <code>efficient</code>.</li>
+<li><strong>Undervolted</strong> rows add a clock offset (each clock runs at the voltage of a lower one), found by the
+  run's offset search with self-checks and held under a clock cap. Every card is different: treat
+  them as an example of what the search finds, not as settings to copy.</li>
+<li><strong>CPUs</strong>: <code>cavaminer rx-bench 60</code> (60 s after the dataset is built), default threads, huge pages,
+  MSR tweak; power is the CPU package power (RAPL). Lower clocks through the maximum CPU clock
+  (<code>--rx-max-freq</code>) or with boost off; the clock is the mean over all cores mid-run. <em>Balanced</em> and <em>best
+  efficiency</em> as for the GPUs.</li>
+<li>Hashrates are before the dev fee (1 % PearlHash, 1 % RandomX).</li>
+</ul>
+<h2>GPUs (PearlHash)</h2>
+<h3>RTX 3070</h3>
+<p>Default power limit 240 W (allowed 100–250 W). Kernel mma17g, k 8192, m 16384. The undervolted rows are from a second run, with the offset search as it is now (it ends where the voltage is at its floor).</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th style="text-align: right;">Power limit</th>
+<th>Memory clock</th>
+<th>GPU clock</th>
+<th>Clock offset</th>
+<th style="text-align: right;">TH/s</th>
+<th style="text-align: right;">Drawn</th>
+<th style="text-align: right;">GH/W</th>
+<th style="text-align: right;">Runs at</th>
+<th style="text-align: right;">Temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stock</td>
+<td style="text-align: right;">240 W</td>
+<td>default (6801 MHz)</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">78.5</td>
+<td style="text-align: right;">236 W</td>
+<td style="text-align: right;">333</td>
+<td style="text-align: right;">1800 MHz</td>
+<td style="text-align: right;">63 °C</td>
+</tr>
+<tr>
+<td>Max hashrate</td>
+<td style="text-align: right;">250 W</td>
+<td>default (6801 MHz)</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">78.9</td>
+<td style="text-align: right;">246 W</td>
+<td style="text-align: right;">321</td>
+<td style="text-align: right;">1818 MHz</td>
+<td style="text-align: right;">64 °C</td>
+</tr>
+<tr>
+<td>Balanced</td>
+<td style="text-align: right;">175 W</td>
+<td>5001 MHz</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">71.8</td>
+<td style="text-align: right;">173 W</td>
+<td style="text-align: right;">416</td>
+<td style="text-align: right;">1650 MHz</td>
+<td style="text-align: right;">56 °C</td>
+</tr>
+<tr>
+<td>Best efficiency</td>
+<td style="text-align: right;">100 W</td>
+<td>810 MHz</td>
+<td>lock 915 MHz</td>
+<td>–</td>
+<td style="text-align: right;">38.2</td>
+<td style="text-align: right;">57 W</td>
+<td style="text-align: right;">672</td>
+<td style="text-align: right;">915 MHz</td>
+<td style="text-align: right;">43 °C</td>
+</tr>
+<tr>
+<td>Max hashrate, undervolted</td>
+<td style="text-align: right;">250 W</td>
+<td>default (6801 MHz)</td>
+<td>max 1963 MHz</td>
+<td>+150 MHz</td>
+<td style="text-align: right;">83.9</td>
+<td style="text-align: right;">244 W</td>
+<td style="text-align: right;">344</td>
+<td style="text-align: right;">1922 MHz</td>
+<td style="text-align: right;">64 °C</td>
+</tr>
+<tr>
+<td>Balanced, undervolted</td>
+<td style="text-align: right;">175 W</td>
+<td>7001 MHz</td>
+<td>max 1963 MHz</td>
+<td>+150 MHz</td>
+<td style="text-align: right;">75.6</td>
+<td style="text-align: right;">170 W</td>
+<td style="text-align: right;">444</td>
+<td style="text-align: right;">1728 MHz</td>
+<td style="text-align: right;">57 °C</td>
+</tr>
+<tr>
+<td>Best efficiency, undervolted</td>
+<td style="text-align: right;">100 W</td>
+<td>810 MHz</td>
+<td>lock 1305 MHz</td>
+<td>+350 MHz</td>
+<td style="text-align: right;">55.9</td>
+<td style="text-align: right;">77 W</td>
+<td style="text-align: right;">723</td>
+<td style="text-align: right;">1305 MHz</td>
+<td style="text-align: right;">42 °C</td>
+</tr>
+</tbody>
+</table>
+<h3>RTX 3090</h3>
+<p>Default power limit 350 W (allowed 100–365 W). Kernel mma17g, k 8192, m 16384. Measured on Windows 11. Stock voltage curve only.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th style="text-align: right;">Power limit</th>
+<th>Memory clock</th>
+<th>GPU clock</th>
+<th>Clock offset</th>
+<th style="text-align: right;">TH/s</th>
+<th style="text-align: right;">Drawn</th>
+<th style="text-align: right;">GH/W</th>
+<th style="text-align: right;">Runs at</th>
+<th style="text-align: right;">Temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stock</td>
+<td style="text-align: right;">350 W</td>
+<td>default (9501 MHz)</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">119.4</td>
+<td style="text-align: right;">344 W</td>
+<td style="text-align: right;">348</td>
+<td style="text-align: right;">1544 MHz</td>
+<td style="text-align: right;">79 °C</td>
+</tr>
+<tr>
+<td>Max hashrate</td>
+<td style="text-align: right;">365 W</td>
+<td>5001 MHz</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">126.7</td>
+<td style="text-align: right;">347 W</td>
+<td style="text-align: right;">365</td>
+<td style="text-align: right;">1634 MHz</td>
+<td style="text-align: right;">76 °C</td>
+</tr>
+<tr>
+<td>Balanced</td>
+<td style="text-align: right;">295 W</td>
+<td>5001 MHz</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">117.3</td>
+<td style="text-align: right;">286 W</td>
+<td style="text-align: right;">411</td>
+<td style="text-align: right;">1515 MHz</td>
+<td style="text-align: right;">72 °C</td>
+</tr>
+<tr>
+<td>Best efficiency</td>
+<td style="text-align: right;">180 W</td>
+<td>810 MHz</td>
+<td>lock 1200 MHz</td>
+<td>–</td>
+<td style="text-align: right;">91.8</td>
+<td style="text-align: right;">168 W</td>
+<td style="text-align: right;">548</td>
+<td style="text-align: right;">1200 MHz</td>
+<td style="text-align: right;">59 °C</td>
+</tr>
+</tbody>
+</table>
+<h3>RTX 5090 (card A)</h3>
+<p>Default power limit 575 W (allowed 400–600 W). Kernel mma52, k 8192, m 8192. Two cards in one rig; this one runs about 10 °C warmer than card B.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th style="text-align: right;">Power limit</th>
+<th>Memory clock</th>
+<th>GPU clock</th>
+<th>Clock offset</th>
+<th style="text-align: right;">TH/s</th>
+<th style="text-align: right;">Drawn</th>
+<th style="text-align: right;">GH/W</th>
+<th style="text-align: right;">Runs at</th>
+<th style="text-align: right;">Temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stock</td>
+<td style="text-align: right;">575 W</td>
+<td>default (13801 MHz)</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">402.4</td>
+<td style="text-align: right;">562 W</td>
+<td style="text-align: right;">715</td>
+<td style="text-align: right;">2508 MHz</td>
+<td style="text-align: right;">82 °C</td>
+</tr>
+<tr>
+<td>Max hashrate</td>
+<td style="text-align: right;">565 W</td>
+<td>14001 MHz</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">404.4</td>
+<td style="text-align: right;">546 W</td>
+<td style="text-align: right;">742</td>
+<td style="text-align: right;">2505 MHz</td>
+<td style="text-align: right;">80 °C</td>
+</tr>
+<tr>
+<td>Balanced</td>
+<td style="text-align: right;">425 W</td>
+<td>7001 MHz</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">377.6</td>
+<td style="text-align: right;">424 W</td>
+<td style="text-align: right;">890</td>
+<td style="text-align: right;">2347 MHz</td>
+<td style="text-align: right;">72 °C</td>
+</tr>
+<tr>
+<td>Best efficiency</td>
+<td style="text-align: right;">400 W</td>
+<td>810 MHz</td>
+<td>lock 1350 MHz</td>
+<td>–</td>
+<td style="text-align: right;">208.3</td>
+<td style="text-align: right;">197 W</td>
+<td style="text-align: right;">1056</td>
+<td style="text-align: right;">1342 MHz</td>
+<td style="text-align: right;">59 °C</td>
+</tr>
+<tr>
+<td>Max hashrate, undervolted</td>
+<td style="text-align: right;">460 W</td>
+<td>14001 MHz</td>
+<td>max 2718 MHz</td>
+<td>+950 MHz</td>
+<td style="text-align: right;">422.0</td>
+<td style="text-align: right;">436 W</td>
+<td style="text-align: right;">968</td>
+<td style="text-align: right;">2625 MHz</td>
+<td style="text-align: right;">73 °C</td>
+</tr>
+<tr>
+<td>Balanced, undervolted</td>
+<td style="text-align: right;">400 W</td>
+<td>7001 MHz</td>
+<td>max 2718 MHz</td>
+<td>+950 MHz</td>
+<td style="text-align: right;">400.4</td>
+<td style="text-align: right;">398 W</td>
+<td style="text-align: right;">1006</td>
+<td style="text-align: right;">2501 MHz</td>
+<td style="text-align: right;">70 °C</td>
+</tr>
+<tr>
+<td>Best efficiency, undervolted</td>
+<td style="text-align: right;">400 W</td>
+<td>7001 MHz</td>
+<td>lock 1815 MHz</td>
+<td>+950 MHz</td>
+<td style="text-align: right;">290.4</td>
+<td style="text-align: right;">266 W</td>
+<td style="text-align: right;">1092</td>
+<td style="text-align: right;">1807 MHz</td>
+<td style="text-align: right;">62 °C</td>
+</tr>
+</tbody>
+</table>
+<h3>RTX 5090 (card B)</h3>
+<p>Default power limit 575 W (allowed 400–600 W). Kernel mma52, k 8192, m 8192.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th style="text-align: right;">Power limit</th>
+<th>Memory clock</th>
+<th>GPU clock</th>
+<th>Clock offset</th>
+<th style="text-align: right;">TH/s</th>
+<th style="text-align: right;">Drawn</th>
+<th style="text-align: right;">GH/W</th>
+<th style="text-align: right;">Runs at</th>
+<th style="text-align: right;">Temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stock</td>
+<td style="text-align: right;">575 W</td>
+<td>default (13801 MHz)</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">410.4</td>
+<td style="text-align: right;">573 W</td>
+<td style="text-align: right;">716</td>
+<td style="text-align: right;">2557 MHz</td>
+<td style="text-align: right;">70 °C</td>
+</tr>
+<tr>
+<td>Max hashrate</td>
+<td style="text-align: right;">565 W</td>
+<td>14001 MHz</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">413.7</td>
+<td style="text-align: right;">556 W</td>
+<td style="text-align: right;">744</td>
+<td style="text-align: right;">2565 MHz</td>
+<td style="text-align: right;">69 °C</td>
+</tr>
+<tr>
+<td>Balanced</td>
+<td style="text-align: right;">400 W</td>
+<td>7001 MHz</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">372.9</td>
+<td style="text-align: right;">399 W</td>
+<td style="text-align: right;">934</td>
+<td style="text-align: right;">2325 MHz</td>
+<td style="text-align: right;">60 °C</td>
+</tr>
+<tr>
+<td>Best efficiency</td>
+<td style="text-align: right;">400 W</td>
+<td>810 MHz</td>
+<td>lock 1305 MHz</td>
+<td>–</td>
+<td style="text-align: right;">200.4</td>
+<td style="text-align: right;">174 W</td>
+<td style="text-align: right;">1153</td>
+<td style="text-align: right;">1290 MHz</td>
+<td style="text-align: right;">48 °C</td>
+</tr>
+<tr>
+<td>Max hashrate, undervolted</td>
+<td style="text-align: right;">460 W</td>
+<td>14001 MHz</td>
+<td>max 2774 MHz</td>
+<td>+700 MHz</td>
+<td style="text-align: right;">430.8</td>
+<td style="text-align: right;">432 W</td>
+<td style="text-align: right;">998</td>
+<td style="text-align: right;">2678 MHz</td>
+<td style="text-align: right;">63 °C</td>
+</tr>
+<tr>
+<td>Balanced, undervolted</td>
+<td style="text-align: right;">400 W</td>
+<td>7001 MHz</td>
+<td>max 2662 MHz</td>
+<td>+950 MHz</td>
+<td style="text-align: right;">420.3</td>
+<td style="text-align: right;">394 W</td>
+<td style="text-align: right;">1067</td>
+<td style="text-align: right;">2647 MHz</td>
+<td style="text-align: right;">62 °C</td>
+</tr>
+<tr>
+<td>Best efficiency, undervolted</td>
+<td style="text-align: right;">400 W</td>
+<td>810 MHz</td>
+<td>lock 1845 MHz</td>
+<td>+950 MHz</td>
+<td style="text-align: right;">277.3</td>
+<td style="text-align: right;">236 W</td>
+<td style="text-align: right;">1178</td>
+<td style="text-align: right;">1837 MHz</td>
+<td style="text-align: right;">52 °C</td>
+</tr>
+</tbody>
+</table>
+<h3>RTX 5090 (in a workstation)</h3>
+<p>Default power limit 575 W (allowed 400–600 W). Kernel mma52, k 8192, m 8192. Drives a desktop while mining (which costs a few percent and adds noise); measured with the power limit ceiling at 450 W and no memory clock below 7001 MHz (<code>--tune-memory 7001..</code>). Stock voltage curve only.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th style="text-align: right;">Power limit</th>
+<th>Memory clock</th>
+<th>GPU clock</th>
+<th>Clock offset</th>
+<th style="text-align: right;">TH/s</th>
+<th style="text-align: right;">Drawn</th>
+<th style="text-align: right;">GH/W</th>
+<th style="text-align: right;">Runs at</th>
+<th style="text-align: right;">Temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Max hashrate</td>
+<td style="text-align: right;">450 W</td>
+<td>default (13801 MHz)</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">356.4</td>
+<td style="text-align: right;">444 W</td>
+<td style="text-align: right;">803</td>
+<td style="text-align: right;">2402 MHz</td>
+<td style="text-align: right;">72 °C</td>
+</tr>
+<tr>
+<td>Balanced</td>
+<td style="text-align: right;">400 W</td>
+<td>default (13801 MHz)</td>
+<td>–</td>
+<td>–</td>
+<td style="text-align: right;">339.8</td>
+<td style="text-align: right;">396 W</td>
+<td style="text-align: right;">858</td>
+<td style="text-align: right;">2302 MHz</td>
+<td style="text-align: right;">69 °C</td>
+</tr>
+<tr>
+<td>Best efficiency</td>
+<td style="text-align: right;">400 W</td>
+<td>7001 MHz</td>
+<td>lock 1305 MHz</td>
+<td>–</td>
+<td style="text-align: right;">183.9</td>
+<td style="text-align: right;">176 W</td>
+<td style="text-align: right;">1043</td>
+<td style="text-align: right;">1290 MHz</td>
+<td style="text-align: right;">53 °C</td>
+</tr>
+</tbody>
+</table>
+<h3>Notes</h3>
+<ul>
+<li>Fans at 100 % instead of the driver's curve add up to 1 % of hashrate: the two RTX 5090s with their undervolted maximum settings went from 422.0 / 430.8 to 425.8 / 433.5 TH/s (65 / 56 °C instead of 74 / 63 °C; the warmer card drew 10 W less), the RTX 3090 from 123.5 to 124.8 TH/s (70 instead of 76 °C), the RTX 3070 at its 250 W limit from 83.7 to 84.2 TH/s (49 instead of 63 °C). 85 % gave 0.8 % on the RTX 5090s.</li>
+<li>The two RTX 5090s mining side by side with their undervolted maximum settings (power limits at 600 W, fans at 100 %, clock caps 2665 / 2721 MHz) do 859.9 TH/s at 867 W together. With the offsets the cards stay under 470 W whatever the limit: their clock stops rising at about 2650 / 2700 MHz.</li>
+<li>The memory clock decides more than expected at low power: the RTX 3090 at 185 W does 74.6 TH/s with 5001 MHz memory and 99.4 TH/s with 810 MHz; the RTX 3070 at 100 W 49.7 TH/s with the default clock and 55.2 TH/s with 5001 MHz. The RTX 5090's default is 13801 MHz; locked at its 14001 MHz it does the same or more for 20 to 30 W less, which is why its maximum rows are not at the highest power limit.</li>
+<li>The clock caps in the RTX 5090s' undervolted rows are the ones their runs measured under (2 % above the clock of the offset search's confirmation). The miner now caps at the highest clock the search saw pass (RTX 5090: 2665 / 2721 MHz for the maximum rows; the RTX 3070's rows were measured that way).</li>
+<li>The RTX 3090 does not hold power limits below 155 to 180 W with its memory at 5001 MHz or more (the driver drops it to 210 MHz, 17.5 TH/s at 103 W); with 810 MHz memory it holds its 100 W.</li>
+<li>Undervolting pays most at the low end: the RTX 3070's best efficiency goes from 672 GH/W at 38 TH/s (stock curve, 57 W) to 723 GH/W at 56 TH/s (77 W).</li>
+</ul>
+<h2>CPUs (RandomX)</h2>
+<table>
+<thead>
+<tr>
+<th>CPU</th>
+<th>Profile</th>
+<th>Setting</th>
+<th style="text-align: right;">Clock</th>
+<th style="text-align: right;">H/s</th>
+<th style="text-align: right;">Package power</th>
+<th style="text-align: right;">H/J</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AMD Ryzen 9 9950X</td>
+<td>default</td>
+<td>default</td>
+<td style="text-align: right;">5072 MHz</td>
+<td style="text-align: right;">17 578</td>
+<td style="text-align: right;">200 W</td>
+<td style="text-align: right;">88</td>
+</tr>
+<tr>
+<td>AMD Ryzen 9 9950X</td>
+<td>balanced</td>
+<td>max 4000 MHz</td>
+<td style="text-align: right;">4020 MHz</td>
+<td style="text-align: right;">16 025</td>
+<td style="text-align: right;">114 W</td>
+<td style="text-align: right;">141</td>
+</tr>
+<tr>
+<td>AMD Ryzen 9 9950X</td>
+<td>best efficiency</td>
+<td>max 3000 MHz</td>
+<td style="text-align: right;">3016 MHz</td>
+<td style="text-align: right;">13 897</td>
+<td style="text-align: right;">69 W</td>
+<td style="text-align: right;">201</td>
+</tr>
+<tr>
+<td>AMD Ryzen 9 7950X</td>
+<td>default</td>
+<td>default</td>
+<td style="text-align: right;">5028 MHz</td>
+<td style="text-align: right;">17 757</td>
+<td style="text-align: right;">145 W</td>
+<td style="text-align: right;">122</td>
+</tr>
+<tr>
+<td>AMD Ryzen 9 7950X</td>
+<td>balanced</td>
+<td>max 4500 MHz</td>
+<td style="text-align: right;">4456 MHz</td>
+<td style="text-align: right;">16 799</td>
+<td style="text-align: right;">94 W</td>
+<td style="text-align: right;">179</td>
+</tr>
+<tr>
+<td>AMD Ryzen 9 7950X</td>
+<td>best efficiency</td>
+<td>max 2500 MHz</td>
+<td style="text-align: right;">2455 MHz</td>
+<td style="text-align: right;">11 655</td>
+<td style="text-align: right;">41 W</td>
+<td style="text-align: right;">283</td>
+</tr>
+<tr>
+<td>AMD Ryzen 9 5950X</td>
+<td>default</td>
+<td>default</td>
+<td style="text-align: right;">4067 MHz</td>
+<td style="text-align: right;">15 592</td>
+<td style="text-align: right;">134 W</td>
+<td style="text-align: right;">117</td>
+</tr>
+<tr>
+<td>AMD Ryzen 9 5950X</td>
+<td>balanced = best efficiency</td>
+<td>boost off</td>
+<td style="text-align: right;">3394 MHz</td>
+<td style="text-align: right;">14 319</td>
+<td style="text-align: right;">101 W</td>
+<td style="text-align: right;">142</td>
+</tr>
+<tr>
+<td>AMD Ryzen Threadripper PRO 3995WX (dataset on 1 GiB pages)</td>
+<td>default</td>
+<td>default</td>
+<td style="text-align: right;">3158 MHz</td>
+<td style="text-align: right;">50 514</td>
+<td style="text-align: right;">279 W</td>
+<td style="text-align: right;">181</td>
+</tr>
+<tr>
+<td>AMD Ryzen Threadripper PRO 3995WX (dataset on 1 GiB pages)</td>
+<td>balanced = best efficiency</td>
+<td>max 2600 MHz</td>
+<td style="text-align: right;">2595 MHz</td>
+<td style="text-align: right;">46 156</td>
+<td style="text-align: right;">208 W</td>
+<td style="text-align: right;">222</td>
+</tr>
+<tr>
+<td>Intel Core i7-14700 (65 W base power limit set in the BIOS)</td>
+<td>default = balanced = best efficiency</td>
+<td>default</td>
+<td style="text-align: right;">–</td>
+<td style="text-align: right;">9 109</td>
+<td style="text-align: right;">65 W</td>
+<td style="text-align: right;">140</td>
+</tr>
+<tr>
+<td>Intel Core i7-7700K (host of the RTX 3090 rig)</td>
+<td>default (the only run)</td>
+<td>default</td>
+<td style="text-align: right;">3950 MHz</td>
+<td style="text-align: right;">2 988</td>
+<td style="text-align: right;">57 W</td>
+<td style="text-align: right;">53</td>
+</tr>
+<tr>
+<td>Intel Pentium Gold G5400 (2 threads, host of the RTX 3070 rig)</td>
+<td>default (the only run)</td>
+<td>default</td>
+<td style="text-align: right;">3700 MHz</td>
+<td style="text-align: right;">1 384</td>
+<td style="text-align: right;">31 W</td>
+<td style="text-align: right;">44</td>
+</tr>
+</tbody>
+</table></article>
+</main>
+<footer><div class="wrap">CavaMiner · PearlHash on NVIDIA GPUs, RandomX on CPUs · dev fee 1 % PearlHash, 1 % RandomX · <a href="license.html">license</a> · <a href="https://github.com/cavalius/cavaminer/issues">bug reports and requests</a></div></footer>
+</body>
+</html>

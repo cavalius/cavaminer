@@ -98,3 +98,14 @@ html.viewing { overflow: hidden; }
   .v-prev { left: 6px; }
   .v-next { right: 6px; }
 }
+
+/* Benchmark tables: numbers stay on one line, a table too wide scrolls. */
+.scroll { overflow-x: auto; }
+.scroll th, .scroll td, .bench th, .bench td { white-space: nowrap; }
+.bench table { font-size: 14px; }
+.bench th, .bench td { padding: 6px 8px; }
+.bench th { letter-spacing: 0; }
+.bench td:first-child { white-space: normal; min-width: 130px; }
+@media (max-width: 640px) {
+  nav { flex-wrap: wrap; gap: 4px 16px; }
+}
