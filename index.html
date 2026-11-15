@@ -14,6 +14,7 @@
 <section class="hero">
 <img src="logo.svg" alt="CavaMiner" width="360">
 <p class="lead">A cryptocurrency miner for <b>PearlHash</b> (Pearl) on NVIDIA GPUs and <b>RandomX</b> (Monero) on CPUs — one process can do both. Linux and Windows.</p>
+<p class="highlight"><b>420 TH/s from one RTX 5090 drawing 394 W: 1067 GH/W.</b> <span class="muted">The balanced, undervolted setting the miner's own tuning run found, measured while mining on a pool (<a href="benchmarks.html">benchmarks</a>).</span></p>
 </section>
 <section class="card" id="download">
 <h2>Download 0.37.9 <span class="muted">· 2026-11-15 · Linux and Windows, x86-64</span></h2>
@@ -29,8 +30,8 @@
 </section>
 <section class="card" id="hashrates">
 <h2>Hashrates <span class="muted">· PearlHash, measured while mining on a pool</span></h2>
-<div class="scroll"><table><thead><tr><th>GPU</th><th>Stock</th><th>Balanced</th><th>Best efficiency</th><th>Max hashrate, undervolted</th></tr></thead><tbody><tr><td>RTX 3070</td><td>78.5 TH/s <span class="muted">at 236 W</span></td><td>71.8 TH/s <span class="muted">at 173 W</span></td><td>38.2 TH/s <span class="muted">at 57 W</span></td><td>83.9 TH/s <span class="muted">at 244 W</span></td></tr><tr><td>RTX 3090</td><td>119.4 TH/s <span class="muted">at 344 W</span></td><td>117.3 TH/s <span class="muted">at 286 W</span></td><td>91.8 TH/s <span class="muted">at 168 W</span></td><td>–</td></tr><tr><td>RTX 5090</td><td>402.4 TH/s <span class="muted">at 562 W</span></td><td>377.6 TH/s <span class="muted">at 424 W</span></td><td>208.3 TH/s <span class="muted">at 197 W</span></td><td>422.0 TH/s <span class="muted">at 436 W</span></td></tr></tbody></table></div>
-<p class="muted">Stock: the card as it comes. Balanced: the most efficient setting that keeps 90 % of the highest hashrate. Undervolted: with the clock offset the miner's search found for that card (every card differs). The miner's tuning runs measure these settings on your own cards.</p>
+<div class="scroll"><table><thead><tr><th>GPU</th><th>Stock</th><th>Balanced</th><th>Best efficiency</th><th>Balanced, undervolted</th><th>Max, undervolted</th></tr></thead><tbody><tr><td>RTX 3070</td><td>78.5 TH/s <span class="muted">at 236 W</span></td><td>71.8 TH/s <span class="muted">at 173 W</span></td><td>38.2 TH/s <span class="muted">at 57 W</span></td><td><b>75.6 TH/s <span class="muted">at 170 W</span></b> <span class="muted">· 444 GH/W</span></td><td>83.9 TH/s <span class="muted">at 244 W</span></td></tr><tr><td>RTX 3090</td><td>119.4 TH/s <span class="muted">at 344 W</span></td><td>117.3 TH/s <span class="muted">at 286 W</span></td><td>91.8 TH/s <span class="muted">at 168 W</span></td><td>–</td><td>–</td></tr><tr><td>RTX 5090</td><td>410.4 TH/s <span class="muted">at 573 W</span></td><td>372.9 TH/s <span class="muted">at 399 W</span></td><td>200.4 TH/s <span class="muted">at 174 W</span></td><td><b>420.3 TH/s <span class="muted">at 394 W</span></b> <span class="muted">· 1067 GH/W</span></td><td>430.8 TH/s <span class="muted">at 432 W</span></td></tr></tbody></table></div>
+<p class="muted">Stock: the card as it comes. Balanced: the most efficient setting that keeps 90 % of the highest hashrate. Undervolted: with the clock offset the miner's search found for that card; every card differs (the RTX 5090 shown is the better of two in one rig: the other does 400 TH/s at 398 W balanced and undervolted). The miner's tuning runs measure these settings on your own cards.</p>
 <p class="muted">RandomX: Ryzen 9 9950X 17.6 kH/s, Ryzen 9 7950X 17.8 kH/s, Ryzen 9 5950X 15.6 kH/s, Ryzen Threadripper PRO 3995WX 50.5 kH/s.</p>
 <p class="muted">Every setting, the other cards and CPUs, and how it was measured: <a href="benchmarks.html">benchmarks</a>.</p>
 </section>
